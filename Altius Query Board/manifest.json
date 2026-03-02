@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "Query Assistant Plugin",
+  "version": "2.7.2",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "identity",
+    "identity.email",
+    "notifications",
+    "alarms",
+    "storage" 
+  ],
+  "host_permissions": [
+    "https://qb.altiusnxt.com/*",
+    "https://api.languagetool.org/*" 
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open Query Assistant",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html",
+        "popup.js",
+        "styles.css",
+        "icon.png",
+        "schema template 20-1-2026.xlsx"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+ "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://qb.altiusnxt.com http://localhost:5000 https://api.languagetool.org; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com;"
+}
+}

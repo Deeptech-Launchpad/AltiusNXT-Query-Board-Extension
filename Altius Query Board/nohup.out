@@ -1,0 +1,96 @@
+nohup: ignoring input
+[2026-01-10 06:28:24 +0000] [28283] [INFO] Starting gunicorn 23.0.0
+[2026-01-10 06:28:24 +0000] [28283] [INFO] Listening at: http://127.0.0.1:5000 (28283)
+[2026-01-10 06:28:24 +0000] [28283] [INFO] Using worker: sync
+[2026-01-10 06:28:24 +0000] [28284] [INFO] Booting worker with pid: 28284
+[2026-01-10 06:28:33,708] ERROR in app: Exception on /api/check_notifications [POST]
+Traceback (most recent call last):
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask_cors/extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/home/ubuntu/AltiusNXT_Query_Board/server.py", line 249, in check_notifications
+    cur.execute("SELECT id, message, reference_id FROM notifications WHERE recipient_email = %s AND is_read = FALSE", (email,))
+psycopg2.errors.UndefinedTable: relation "notifications" does not exist
+LINE 1: SELECT id, message, reference_id FROM notifications WHERE re...
+                                              ^
+
+[2026-01-10 06:29:07,259] ERROR in app: Exception on /api/check_notifications [POST]
+Traceback (most recent call last):
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask_cors/extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/home/ubuntu/AltiusNXT_Query_Board/server.py", line 249, in check_notifications
+    cur.execute("SELECT id, message, reference_id FROM notifications WHERE recipient_email = %s AND is_read = FALSE", (email,))
+psycopg2.errors.UndefinedTable: relation "notifications" does not exist
+LINE 1: SELECT id, message, reference_id FROM notifications WHERE re...
+                                              ^
+
+[2026-01-10 06:29:33,630] ERROR in app: Exception on /api/check_notifications [POST]
+Traceback (most recent call last):
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask_cors/extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/home/ubuntu/AltiusNXT_Query_Board/server.py", line 249, in check_notifications
+    cur.execute("SELECT id, message, reference_id FROM notifications WHERE recipient_email = %s AND is_read = FALSE", (email,))
+psycopg2.errors.InsufficientPrivilege: permission denied for table notifications
+
+[2026-01-10 06:30:07,536] ERROR in app: Exception on /api/check_notifications [POST]
+Traceback (most recent call last):
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask_cors/extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/home/ubuntu/AltiusNXT_Query_Board/server.py", line 249, in check_notifications
+    cur.execute("SELECT id, message, reference_id FROM notifications WHERE recipient_email = %s AND is_read = FALSE", (email,))
+psycopg2.errors.InsufficientPrivilege: permission denied for table notifications
+
+[2026-01-10 06:30:32 +0000] [28283] [INFO] Handling signal: hup
+[2026-01-10 06:30:32 +0000] [28283] [INFO] Hang up: Master
+[2026-01-10 06:30:32 +0000] [28283] [ERROR] Worker (pid:28284) was sent SIGHUP!
+[2026-01-10 06:30:32 +0000] [28310] [INFO] Booting worker with pid: 28310
+[2026-01-10 06:30:33,654] ERROR in app: Exception on /api/check_notifications [POST]
+Traceback (most recent call last):
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask_cors/extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/home/ubuntu/AltiusNXT_Query_Board/venv/lib/python3.10/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/home/ubuntu/AltiusNXT_Query_Board/server.py", line 249, in check_notifications
+    cur.execute("SELECT id, message, reference_id FROM notifications WHERE recipient_email = %s AND is_read = FALSE", (email,))
+psycopg2.errors.InsufficientPrivilege: permission denied for table notifications
+
+[2026-01-10 06:30:40 +0000] [28283] [INFO] Handling signal: term
+[2026-01-10 06:30:40 +0000] [28310] [INFO] Worker exiting (pid: 28310)
+[2026-01-10 06:30:40 +0000] [28283] [INFO] Shutting down: Master

@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AltiusNXT Assistant</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+
+    <style>
+      /* --- BASE STYLES --- */
+      body {
+        font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: transparent;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .extension-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        width: 100%;
+        background: #ffffff;
+        overflow-y: auto;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 15px 20px;
+        color: white;
+        flex-shrink: 0;
+      }
+
+      .header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .title-area h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .header p {
+        margin: 5px 0 0;
+        font-size: 12px;
+        opacity: 0.9;
+        padding-left: 28px;
+      }
+
+      .close-window-btn {
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        opacity: 0.8;
+        transition: 0.2s;
+        margin-left: 5px;
+      }
+
+      .close-window-btn:hover {
+        opacity: 1;
+        transform: scale(1.1);
+      }
+      
+      #exportBtn:hover {
+        color: #2ed573;
+        text-shadow: 0 0 5px rgba(0,0,0,0.2);
+      }
+
+      .status-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s ease;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+        text-decoration: none;
+        background: transparent;
+      }
+
+      .status-btn:hover {
+        transform: scale(1.1);
+        border-color: white;
+      }
+
+      .status-green {
+        background-color: #2ed573;
+        box-shadow: 0 0 8px #2ed573;
+        border-color: #fff;
+      }
+
+      .status-orange {
+        background-color: #ff9f43;
+        box-shadow: 0 0 8px #ff9f43;
+        animation: pulse 2s infinite;
+        border-color: #fff;
+      }
+
+      .status-yellow {
+        background-color: #f1c40f;
+        box-shadow: 0 0 8px #f1c40f;
+        animation: bounce 1s ease infinite;
+        border-color: #fff;
+      }
+
+      .form-body {
+        padding: 20px;
+        flex-grow: 1;
+      }
+
+      .input-group {
+        margin-bottom: 15px;
+      }
+
+      .input-group label {
+        display: block;
+        font-size: 12px;
+        color: #555;
+        margin-bottom: 5px;
+        font-weight: 700;
+      }
+
+      select,
+      input[type="text"],
+      textarea {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 13px;
+        background: #f8f9fa;
+        box-sizing: border-box;
+        transition: 0.3s;
+      }
+
+      select:focus,
+      input:focus,
+      textarea:focus {
+        border-color: #764ba2;
+        background: #fff;
+        outline: none;
+      }
+
+      textarea:disabled,
+      input:disabled {
+        background-color: #e9ecef;
+        color: #adb5bd;
+        cursor: not-allowed;
+        border-color: #eee;
+      }
+
+      .input-wrapper {
+        position: relative;
+      }
+
+      .custom-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #667eea;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        max-height: 250px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+      }
+
+      .dropdown-item {
+        padding: 10px;
+        font-size: 12px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+        color: #333;
+        white-space: normal;
+        word-wrap: break-word;
+        line-height: 1.4;
+      }
+
+      .dropdown-item:hover {
+        background: #f0f9ff;
+        color: #667eea;
+        font-weight: 600;
+      }
+
+      #projectInput,
+      #categoryInput,
+      #attributeInput {
+        resize: vertical;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        min-height: 42px;
+        overflow-y: hidden;
+        font-family: inherit;
+      }
+
+      .action-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr); 
+        gap: 6px;
+        margin-bottom: 15px;
+      }
+
+      .grid-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 10px 2px; 
+        border-radius: 8px;
+        font-size: 9px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        gap: 6px;
+        text-transform: uppercase;
+        text-align: center;
+        height: 100%;
+        line-height: 1.2;
+      }
+
+      .grid-btn i {
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+
+      .btn-primary {
+        background: #ffffff;
+        border: 1px solid #667eea;
+        color: #667eea;
+      }
+
+      .btn-primary:hover {
+        background: #667eea;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.2);
+      }
+
+      .btn-general-active {
+        background: #ffffff;
+        border: 1px solid #9b59b6;
+        color: #9b59b6;
+      }
+
+      .btn-general-active:hover {
+        background: #9b59b6;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(155, 89, 182, 0.2);
+      }
+
+      .btn-disabled {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        color: #adb5bd;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+
+      .results-overlay {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.98);
+        z-index: 99;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        padding: 20px;
+        overflow-y: auto;
+      }
+
+      .result-item {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-left: 4px solid #667eea;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        width: 90%;
+        text-align: left;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      }
+
+      .result-query {
+        font-weight: 700;
+        color: #333;
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+
+      .result-response {
+        background: #f0f9ff;
+        padding: 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #2c3e50;
+        border: 1px dashed #b3e5fc;
+        margin-bottom: 8px;
+      }
+
+      .result-url {
+        font-size: 11px;
+        color: #888;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .overlay-actions {
+        width: 100%;
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+        padding-bottom: 20px;
+      }
+
+      .action-btn {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+
+      .btn-close {
+        background-color: #ff4757;
+      }
+
+      .btn-ask {
+        background-color: #2ed573;
+      }
+
+      .query-section {
+        opacity: 0.4;
+        pointer-events: none;
+        filter: blur(1.5px);
+        transition: 0.5s ease;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px dashed #ddd;
+      }
+
+      .query-section.active {
+        opacity: 1;
+        pointer-events: auto;
+        filter: blur(0);
+      }
+
+      .submit-btn {
+        width: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .admin-response-area {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 8px;
+        margin-top: 8px;
+        border: 1px solid #eff2f5;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+      }
+
+      .modern-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        font-size: 12px;
+        margin-bottom: 8px;
+        transition: all 0.2s ease;
+        box-sizing: border-box;
+        background: #fff;
+        font-family: inherit;
+      }
+
+      .file-input-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .file-label-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: white;
+        border: 1px dashed #667eea;
+        color: #667eea;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        transition: all 0.2s;
+      }
+
+      .send-response-btn {
+        background: linear-gradient(135deg, #2ed573 0%, #26af61 100%);
+        width: 100%;
+        border: none;
+        padding: 10px;
+        border-radius: 6px;
+        color: white;
+        font-weight: 600;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 4px 6px rgba(46, 213, 115, 0.2);
+        transition: opacity 0.2s;
+      }
+
+      .escalate-btn {
+        transition: all 0.2s;
+        border: none;
+        border-radius: 6px;
+        color: white;
+        font-weight: 600;
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      .escalate-btn:hover {
+        background-color: #d35400 !important;
+      }
+      /* Ensure the container shows only for Admins */
+      #admin-export-container {
+          padding: 5px;
+      }
+
+      .circle-btn {
+        background-color: #002794; /* Initial Green for Excel icon */
+        color: white;
+        border: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%; /* This creates the circle */
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        transition: transform 0.2s ease, background-color 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .circle-btn.sub-blue {
+        background-color: #3498db; /* Blue color for sub-logs as per your requirement */
+    }
+
+    .circle-btn:hover {
+        transform: scale(1.1); /* Slight grow effect on hover */
+        background-color: #2980b9; /* Darker blue on hover */
+    }
+
+    .circle-btn i {
+        pointer-events: none; /* Ensures the click registers on the button, not the icon */
+    }
+
+    #aiAssistantIcon {
+    display: none; 
+    position: absolute; 
+    right: 15px; 
+    bottom: 12px; /* Position it inside the textarea at bottom right */
+    z-index: 1000; /* Ensure it is above the textarea */
+    background: white;
+    padding: 5px;
+    border-radius: 50%;
+}
+
+#aiSuggestionBox {
+    display: none; 
+    position: absolute; 
+    bottom: 50px; /* Appear above the icon */
+    right: 10px; 
+    width: 220px; 
+    background: white; 
+    border: 1px solid #764ba2; 
+    border-radius: 8px; 
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
+    z-index: 2000; 
+    padding: 12px;
+}
+    </style>
+  </head>
+
+  <body>
+    <div class="extension-container">
+      <div class="header">
+        <div class="header-top">
+          <div class="title-area">
+            <h2><i class="fas fa-robot"></i> AltiusNXT Query Board</h2>
+          </div>
+          <div class="header-controls">
+              <div id="admin-export-container" style="display: none; margin-top: 0px; text-align: center; position: relative;">
+                  <!-- 1. Main Excel Entry Icon -->
+                  <button id="btn-show-downloads" class="circle-btn" title="Excel Report">
+                      <i class="fas fa-file-excel"></i>
+                  </button>
+
+                  <!-- 2. Sub-Options Container (Query, Decision, Usage) -->
+                  <div id="download-options-container" style="display: none; margin-top: 5px; flex-direction: row; gap: 15px; justify-content: center; align-items: center;">
+                      <button id="download-query-log" class="circle-btn sub-blue" title="Query Log">
+                          <i class="fas fa-question-circle"></i>
+                      </button>
+                      <button id="download-decision-log" class="circle-btn sub-blue" title="Decision Log">
+                          <i class="fas fa-gavel"></i>
+                      </button>
+                      <!-- User Activity Icon (Purple) -->
+                      <button id="download-usage-report" class="circle-btn sub-blue" title="User Usage Report" style="background-color: #9b59b6;">
+                          <i class="fas fa-users"></i>
+                      </button>
+                  </div>
+
+                  <!-- 3. NEW: Hidden Date Selection + Green Tick Button -->
+                  <!-- This section is placed in an absolute overlay position to prevent breaking the header layout -->
+                  <div id="usage-date-container" style="display: none; position: absolute; top: 40px; right: 0; background: white; padding: 10px; border-radius: 8px; border: 1px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1001; min-width: 200px;">
+                      <div style="display: flex; align-items: center; gap: 8px; justify-content: center;">
+                          <div style="text-align: left;">
+                              <label style="font-size: 9px; color: #666; display: block;">From:</label>
+                              <input type="date" id="exportStartDate" style="font-size: 11px; padding: 2px; border: 1px solid #ccc; border-radius: 4px;">
+                          </div>
+                          <div style="text-align: left;">
+                              <label style="font-size: 9px; color: #666; display: block;">To:</label>
+                              <input type="date" id="exportEndDate" style="font-size: 11px; padding: 2px; border: 1px solid #ccc; border-radius: 4px;">
+                          </div>
+                          <!-- GREEN TICK BUTTON -->
+                          <button id="btn-confirm-usage" class="circle-btn" style="background-color: #27ae60; width: 28px; height: 28px; margin-top: 12px;" title="Confirm & Download">
+                              <i class="fas fa-check" style="font-size: 14px;"></i>
+                          </button>
+                      </div>
+                  </div>
+              </div>
+              
+              <button id="userStatusBtn" class="status-btn" title="My Queries">
+                  <i class="fas fa-check"></i>
+              </button>
+              <button id="adminStatusBtn" class="status-btn" title="Admin Dashboard">
+                  0
+              </button>
+              <button id="refreshBtn" class="close-window-btn" title="Refresh Data" style="font-size: 16px; margin-right: 8px">
+                  <i class="fas fa-sync-alt"></i>
+              </button>
+              <button id="closeWindowBtn" class="close-window-btn" title="Close Window">
+                  <i class="fas fa-times"></i>
+              </button>
+          </div>
+        </div>
+        <p>Post your Query & View Response</p>
+      </div>
+
+      <div class="form-body">
+        <div class="input-group input-wrapper">
+          <label>Select Project</label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <textarea
+              id="projectInput"
+              placeholder="Type or Select Project..."
+              rows="1"
+              autocomplete="off"
+              style="flex-grow: 1;"
+            ></textarea>
+            
+            <div id="adminIcon" title="Append the files" style="display: none; cursor: pointer;">
+                <i class="fas fa-arrow-up" style="font-size: 1.2rem; color: #764ba2;"></i>
+            </div>
+          </div>
+          <div id="customProjectList" class="custom-dropdown"></div>
+        </div>
+
+        <div id="adminOverlay" class="results-overlay" style="display: none; background: #fff; padding: 20px; z-index: 10000; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 style="margin: 0; color: #2c3e50;">Admin Control Panel</h3>
+                <i class="fas fa-times" id="closeAdmin" style="cursor: pointer; font-size: 1.2rem; color: #ff4757;"></i>
+            </div>
+            
+            <div style="width: 100%; margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer;">
+                    <input type="radio" name="uploadType" value="append_schema" checked> 
+                    <span>Append Schema</span> </label>
+            </div>
+
+            <div style="border: 2px dashed #667eea; padding: 20px; text-align: center; border-radius: 8px; width: 100%; box-sizing: border-box;">
+                <p style="font-size: 11px; color: #666; margin-bottom: 15px;">Use the official template to sync data accurately.</p>
+                
+                <button id="downloadTemplateBtn" class="grid-btn btn-primary" style="margin-bottom: 15px; width: auto; padding: 8px 15px; font-size: 11px;">
+                    <i class="fas fa-file-excel"></i> Download Schema Template
+                </button>
+                
+                <input type="file" id="schemaFileInput" accept=".xlsx, .xls" style="display: none;">
+                <button id="triggerUpload" class="submit-btn" style="background: #764ba2;">Select Excel File</button>
+                <div id="fileNameDisplay" style="margin-top: 10px; font-weight: bold; color: #27ae60;"></div>
+            </div>
+
+            <button id="processUploadBtn" class="submit-btn" style="margin-top: 20px; width: 100%;" disabled>Upload & Sync DB</button>
+        </div>
+
+        <div class="input-group input-wrapper">
+          <label>Select Batch (Optional)</label>
+          <textarea
+            id="batchInput"
+            placeholder="Select Project first..."
+            rows="1"
+            autocomplete="off"
+            disabled
+          ></textarea>
+          <div id="customBatchList" class="custom-dropdown"></div>
+        </div>
+
+        <div class="input-group input-wrapper">
+          <label>Category Reference</label>
+          <textarea
+            id="categoryInput"
+            placeholder="Select Project first..."
+            rows="1"
+            autocomplete="off"
+            disabled
+          ></textarea>
+          <div id="customCategoryList" class="custom-dropdown"></div>
+        </div>
+
+        <div class="input-group input-wrapper">
+          <label>Attribute Reference (Multi-Select)</label>
+          
+          <div id="attributeTagsContainer" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 5px;"></div>
+          
+          <textarea
+            id="attributeInput"
+            placeholder="Select Category first..."
+            rows="1"
+            autocomplete="off"
+            disabled
+          ></textarea>
+          <div id="customAttributeList" class="custom-dropdown"></div>
+        </div>
+
+        <div class="action-grid">
+          <button id="validateBtn" class="grid-btn btn-primary">
+            <i class="fas fa-search"></i> Check Posted Query
+          </button>
+          <button id="checkDecisionBtn" class="grid-btn btn-disabled" disabled>
+            <i class="fas fa-gavel"></i> Check Decision
+          </button>
+          <button id="checkFeedbackBtn" class="grid-btn btn-disabled" disabled>
+            <i class="fas fa-comment-dots"></i> Check Feedback
+          </button>
+          <button id="kbBtn" class="grid-btn btn-primary">
+            <i class="fas fa-book-open"></i> Knowledge Base
+        </button>
+        </div>
+
+        <!-- Knowledge Base Overlay -->
+        <div id="kbOverlay" class="results-overlay" style="display: none; background: #fff; flex-direction: column; padding: 0; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10000; height: 100%; width: 100%; overflow: hidden;">
+            
+            <!-- Fixed Header -->
+            <div class="header" style="flex-shrink: 0; width: 100%; box-sizing: border-box;">
+                <div class="header-top">
+                    <div class="title-area">
+                        <h2><i class="fas fa-book"></i> Knowledge Base</h2>
+                    </div>
+                    <div class="header-controls">
+                        <button id="closeKbOverlay" class="close-window-btn" title="Close"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <p>Browse Project Taxonomy & Documentation</p>
+            </div>
+
+            <!-- Content Body -->
+            <div class="form-body" style="flex-grow: 1; padding: 15px; display: flex; flex-direction: column; align-items: center; width: 100%; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; gap: 10px;">
+                
+                <!-- Project Input -->
+                <div class="input-group input-wrapper" style="width: 100%; box-sizing: border-box;">
+                    <label style="display: block; text-align: center; margin-bottom: 5px; font-weight: 600;">Select Project</label>
+                    <textarea id="kbProjectInput" placeholder="Type or Select Project..." rows="1" style="text-align: center; width: 100%; box-sizing: border-box; resize: none;"></textarea>
+                    <div id="kbProjectList" class="custom-dropdown" style="width: 100%; box-sizing: border-box;"></div>
+                </div>
+
+                <!-- Category Input -->
+                <div class="input-group input-wrapper" style="width: 100%; box-sizing: border-box;">
+                    <label style="display: block; text-align: center; margin-bottom: 5px; font-weight: 600;">Category Reference</label>
+                    <textarea id="kbCategoryInput" placeholder="Select Project first..." rows="2" style="text-align: center; width: 100%; box-sizing: border-box; resize: none;"></textarea>
+                    <div id="kbCategoryList" class="custom-dropdown" style="width: 100%; box-sizing: border-box;"></div>
+                </div>
+
+                <!-- Attribute List Container (INTERNAL SCROLL) -->
+                <div id="kbAttributesContainer" style="width: 100%; border: 1px solid #e0e0e0; border-radius: 12px; background: #fff; flex-grow: 1; min-height: 180px; max-height: 250px; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; display: block; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                    <p style="text-align: center; color: #999; font-size: 12px; margin-top: 50px;">Select a category to view attributes</p>
+                </div>
+
+                <!-- Action Buttons -->
+                <div id="kbActionButtons" style="width: 100%; flex-shrink: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; padding-bottom: 5px;"></div>
+            </div>
+        </div>
+
+        <!-- Attribute Info Modal -->
+        <div id="attrInfoModal" style="display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 350px; background: white; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 10001; overflow: hidden; border: 1px solid #764ba2;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 id="infoAttrName" style="margin:0; font-size: 14px;">Attribute Details</h3>
+                <!-- ADD THE ID HERE AND REMOVE ONCLICK -->
+                <i class="fas fa-times" id="closeAttrInfoModal" style="cursor:pointer;"></i>
+            </div>
+            <div id="infoContent" style="padding: 15px; font-size: 12px; color: #333; line-height: 1.6; max-height: 250px; overflow-y: auto;"></div>
+        </div>
+
+        <div class="results-overlay" id="dbResults">
+          <div class="results-header" style="text-align: center; width: 100%">
+            <h3 id="resultsTitle" style="margin-bottom: 10px;">Results</h3>
+            
+            <div id="searchContext" class="search-context" style="margin-bottom: 10px;"></div>
+            
+            <p style="font-size: 12px; color: #666; margin: 0 0 10px 0">
+              Items found in database:
+            </p>
+          </div>
+          <div
+            id="resultsContainer"
+            style="
+              width: 100%;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+            "
+          ></div>
+          <div class="overlay-actions">
+            <button id="closeOverlayBtn" class="action-btn btn-close">
+              <i class="fas fa-times"></i> Close
+            </button>
+            <button id="askNewQueryBtn" class="action-btn btn-ask">
+              <i class="fas fa-pen"></i> Continue to Post KB
+            </button>
+          </div>
+        </div>
+
+        <div id="finalStep" class="query-section">
+          <div class="query-table-container" style="margin-top: 15px;">
+            <table style="width: 100%; border-collapse: collapse; background: #f9f9f9; border-radius: 0px; overflow: hidden; border: 1px solid #ddd;">
+                <thead style="background: #4d02a3; color: white;">
+                    <tr>
+                        <th style="padding: 8px; font-size: 12px; border-right: 1px solid #444;">SKU ID</th>
+                        <th style="padding: 8px; font-size: 12px; border-right: 1px solid #444;">Mfr.Part #</th>
+                        <th style="padding: 8px; font-size: 12px;">Mfr. Name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding: 0; border-right: 1px solid #ddd;">
+                            <input type="text" id="skuInput" placeholder="Optional" style="width: 100%; border: none; padding: 10px; box-sizing: border-box; background: transparent;">
+                        </td>
+                        <td style="padding: 0; border-right: 1px solid #ddd;">
+                            <input type="text" id="mfrPartInput" placeholder="Optional" style="width: 100%; border: none; padding: 10px; box-sizing: border-box; background: transparent;">
+                        </td>
+                        <td style="padding: 0;">
+                            <input type="text" id="mfrNameInput" placeholder="Optional" style="width: 100%; border: none; padding: 10px; box-sizing: border-box; background: transparent;">
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="input-group" style="margin-top: 15px; position: relative;"> <!-- Ensure relative is here -->
+    <label style="font-weight: bold; color: #2c3e50;">Describe your query</label>
+    
+    <!-- Floating AI Icon (Force high z-index and pointer-events) -->
+    <div id="aiAssistantIcon" style="display: none; position: absolute; right: 10px; bottom: 10px; z-index: 2147483647; cursor: pointer; background: white; padding: 5px; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.2); align-items: center; justify-content: center;">
+        <i class="fas fa-magic" style="color: #764ba2; font-size: 14px;"></i>
+        <span id="aiErrorCount" style="position: absolute; top: -5px; right: -5px; background: #ff4757; color: white; border-radius: 50%; padding: 1px 4px; font-size: 8px; font-weight: bold;">0</span>
+    </div>
+
+    <textarea id="queryText" placeholder="Please provide specific details..." style="width: 100%; height: 80px; margin-top: 5px; padding-right: 40px; position: relative; z-index: 1;"></textarea>
+    
+    <!-- AI Suggestion Popover -->
+    <div id="aiSuggestionBox" style="display: none; position: absolute; bottom: 50px; right: 0; width: 200px; background: white; border: 1px solid #764ba2; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 2147483647; padding: 10px;">
+        <div style="font-size: 10px; font-weight: bold; color: #764ba2; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 3px;">AI SUGGESTIONS</div>
+        <div id="aiSuggestionList" style="max-height: 100px; overflow-y: auto;"></div>
+    </div>
+</div>
+          <div class="input-group">
+            <label>Reference URL</label>
+            <div class="url-wrapper" style="position: relative">
+              <span
+                class="url-icon"
+                style="position: absolute; left: 10px; top: 12px; color: #aaa"
+                ><i class="fas fa-link"></i
+              ></span>
+              <input
+                type="text"
+                id="urlField"
+                value="Waiting for unlock..."
+                style="padding-left: 35px; color: #2980b9"
+              />
+            </div>
+          </div>
+          
+          <button id="submitBtn" class="submit-btn">Post Your Query</button>
+        </div>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

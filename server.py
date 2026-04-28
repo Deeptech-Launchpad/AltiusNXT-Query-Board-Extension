@@ -892,10 +892,11 @@ def validate_query():
                 SELECT 
                     query_text as query, response_text as response, reference_url as url, 
                     status, id, category, attribute_name as attribute,
-                    sku_id, mfr_part_number, manufacturer,batch_name, answered_by
+                    sku_id, mfr_part_number, manufacturer, batch_name, answered_by,
+                    COALESCE(is_response_deprecated, FALSE) as is_response_deprecated,
+                    corrected_response
                 FROM query_logs 
             """
-            # Force the cursor to refresh and pull these specific columns
             cur.execute(f"{sql} {filter_clause} LIMIT 20", tuple(args))
             response_payload["queries"] = [dict(row, is_user_view=True) for row in cur.fetchall()]
 

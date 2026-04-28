@@ -593,7 +593,7 @@ def upload_kb_pdf():
     file.save(file_path)
     
     # FIX: Use request.host_url so it works on localhost AND AWS automatically
-    base_url = "http://qb.altiusnxt.tech" 
+    base_url = "https://qb.altiusnxt.tech" 
     try:
         if request:
             base_url = request.host_url.rstrip('/')
@@ -985,7 +985,7 @@ def respond_query():
         if file and file.filename != '':
             filename = secure_filename(f"{int(time.time())}_{file.filename}")
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            attachment_url = f"http://qb.altiusnxt.tech/api/attachment/{query_id}"
+            attachment_url = f"https://qb.altiusnxt.tech/api/attachment/{query_id}"
             ext = filename.rsplit('.', 1)[1].lower()
             attachment_type = 'image' if ext in ['png', 'jpg', 'jpeg', 'gif'] else 'file'
 

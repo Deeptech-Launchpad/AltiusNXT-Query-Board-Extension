@@ -2,7 +2,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ======================================================
   // 1. INITIALIZATION & CONFIG
   // ======================================================
-  const API_URL = "http://qb.altiusnxt.tech/api";
+  const API_URL = "https://qb.altiusnxt.tech/api";
   let currentUserEmail = "";
   let currentUserRole = "";
   let currentUserIsAdmin = false;

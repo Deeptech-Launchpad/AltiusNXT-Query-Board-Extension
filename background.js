@@ -15,7 +15,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 function checkServerForNotifications() {
     chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, function(info) {
         if (info && info.email) {
-            const apiUrl = "http://qb.altiusnxt.tech/api/check_notifications";
+            const apiUrl = "https://qb.altiusnxt.tech/api/check_notifications";
 
             fetch(apiUrl, {
                 method: 'POST',

@@ -2,7 +2,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ======================================================
   // 1. INITIALIZATION & CONFIG
   // ======================================================
-  const API_URL = "http://72.61.245.208:5005/api";
+  const API_URL = "http://qb.altiusnxt.tech/api";
   let currentUserEmail = "";
   let currentUserRole = "";
   let currentUserIsAdmin = false;
@@ -2069,7 +2069,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         let attachmentHTML = "";
         if (item.attachment_url) {
-          let safeUrl = item.attachment_url.includes("72.61.245.208:5005") || item.attachment_url.includes("localhost") ? `${API_URL}/attachment/${item.id}` : item.attachment_url;
+          let safeUrl = item.attachment_url.includes("qb.altiusnxt.tech") || item.attachment_url.includes("localhost") ? `${API_URL}/attachment/${item.id}` : item.attachment_url;
           attachmentHTML = `<div style="margin-top:8px;"><a href="${safeUrl}" target="_blank" download class="file-label-btn" style="text-decoration:none;"><i class="fas fa-file-download"></i> Download Attachment</a></div>`;
         }
 

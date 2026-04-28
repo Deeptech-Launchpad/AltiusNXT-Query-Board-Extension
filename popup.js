@@ -809,8 +809,8 @@ document.addEventListener("DOMContentLoaded", function () {
         // UPDATED LOGIC: Allow all admin roles to see the dashboard and export features
         if (data.is_admin || adminRoles.includes(data.role)) {
           initAdminButton();
-          initAdminWorkHistoryBtn(); // Show "My Work History" briefcase button
-          initUserButton();          // Show "My Queries" button for admins too
+          initAdminWorkHistoryBtn(); // Briefcase: has asked + responded queries
+          // NOTE: No userStatusBtn for admins — it's merged into the briefcase
           const adminExportContainer = document.getElementById(
             "admin-export-container",
           );
@@ -818,7 +818,7 @@ document.addEventListener("DOMContentLoaded", function () {
             adminExportContainer.style.display = "block";
           setupExportListeners();
         } else {
-          initUserButton();
+          initUserButton(); // Non-admins still get their own history button
         }
       })
       .catch((err) => {
@@ -1125,6 +1125,22 @@ document.addEventListener("DOMContentLoaded", function () {
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
     newBtn.addEventListener("click", () => fetchAdminHistory());
+    // Check if admin has unseen responses to their own asked queries
+    fetch(`${API_URL}/my_history`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userEmail: currentUserEmail }),
+    }).then(r => r.json()).then(data => {
+      const seenIds = JSON.parse(localStorage.getItem("seen_query_ids") || "[]");
+      const hasNewResponse = data.some(q =>
+        q.status && q.status.toLowerCase() === "closed" && !seenIds.includes(q.id)
+      );
+      const freshBtn = document.getElementById("adminWorkHistoryBtn");
+      if (freshBtn && hasNewResponse) {
+        freshBtn.style.background = "#f39c12"; // Orange alert: new response
+        freshBtn.title = "New response to your query!";
+      }
+    }).catch(() => {});
   }
 
   function fetchAdminHistory() {
@@ -1133,18 +1149,49 @@ document.addEventListener("DOMContentLoaded", function () {
     resultsTitle.innerText = "My Work History";
     if (searchContext) searchContext.innerText = currentUserEmail;
 
-    fetch(`${API_URL}/admin_history`, {
+    // Reset button color back to purple (no longer alerting)
+    const wBtn = document.getElementById("adminWorkHistoryBtn");
+    if (wBtn) { wBtn.style.background = "#764ba2"; wBtn.title = "My Work History"; }
+
+    const adminHistoryPromise = fetch(`${API_URL}/admin_history`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userEmail: currentUserEmail }),
-    })
-    .then(res => res.json())
-    .then(data => {
+    }).then(r => r.json());
+
+    const myAskedPromise = fetch(`${API_URL}/my_history`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userEmail: currentUserEmail }),
+    }).then(r => r.json());
+
+    Promise.all([adminHistoryPromise, myAskedPromise])
+    .then(([data, askedData]) => {
       resultsContainer.innerHTML = "";
 
-      // --- SECTION 1: Responses I Gave ---
+      // Mark asked query responses as seen
+      const seenIds = JSON.parse(localStorage.getItem("seen_query_ids") || "[]");
+      askedData.forEach(q => { if (!seenIds.includes(q.id)) seenIds.push(q.id); });
+      localStorage.setItem("seen_query_ids", JSON.stringify(seenIds));
+
+      // --- SECTION 1: Queries I Asked (with responses) ---
+      const askedHeader = document.createElement("h4");
+      askedHeader.style.cssText = "margin:10px 0; color:#2980b9; border-bottom:2px solid #3498db; padding-bottom:5px; font-size:13px;";
+      askedHeader.innerHTML = '<i class="fas fa-question-circle"></i> Queries I Asked (' + (askedData || []).length + ')';
+      resultsContainer.appendChild(askedHeader);
+
+      if (askedData && askedData.length > 0) {
+        renderResults(askedData, "user_history");
+      } else {
+        const empty = document.createElement("p");
+        empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
+        empty.innerHTML = '<i class="fas fa-inbox"></i> No queries asked yet.';
+        resultsContainer.appendChild(empty);
+      }
+
+      // --- SECTION 2: Responses I Gave ---
       const respondedHeader = document.createElement("h4");
-      respondedHeader.style.cssText = "margin:10px 0; color:#27ae60; border-bottom:2px solid #27ae60; padding-bottom:5px; font-size:13px;";
+      respondedHeader.style.cssText = "margin:20px 0 10px 0; color:#27ae60; border-bottom:2px solid #27ae60; padding-bottom:5px; font-size:13px;";
       respondedHeader.innerHTML = '<i class="fas fa-reply-all"></i> Responses I Gave (' + (data.responded || []).length + ')';
       resultsContainer.appendChild(respondedHeader);
 
@@ -1157,7 +1204,7 @@ document.addEventListener("DOMContentLoaded", function () {
         resultsContainer.appendChild(empty);
       }
 
-      // --- SECTION 2: Queries I Assigned/Forwarded ---
+      // --- SECTION 3: Queries I Assigned/Forwarded ---
       const forwardedHeader = document.createElement("h4");
       forwardedHeader.style.cssText = "margin:20px 0 10px 0; color:#e67e22; border-bottom:2px solid #e67e22; padding-bottom:5px; font-size:13px;";
       forwardedHeader.innerHTML = '<i class="fas fa-share"></i> Queries I Assigned (Pending) (' + (data.forwarded || []).length + ')';
@@ -1190,7 +1237,7 @@ document.addEventListener("DOMContentLoaded", function () {
         resultsContainer.appendChild(empty);
       }
     })
-    .catch(err => {
+    .catch(() => {
       resultsContainer.innerHTML = '<p style="text-align:center; color:red;">Failed to load work history.</p>';
     });
   }

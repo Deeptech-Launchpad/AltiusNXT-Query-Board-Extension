@@ -107,6 +107,38 @@ def get_db_connection():
     except Exception as e:
         print(f"DB Error: {e}")
         return None
+
+def run_startup_migrations():
+    """Ensure all required DB columns exist on startup."""
+    conn = get_db_connection()
+    if not conn:
+        return
+    try:
+        cur = conn.cursor()
+        # Ensure notifications table has required columns
+        cur.execute("""
+            ALTER TABLE notifications
+            ADD COLUMN IF NOT EXISTS recipient_email TEXT,
+            ADD COLUMN IF NOT EXISTS message TEXT,
+            ADD COLUMN IF NOT EXISTS reference_id INTEGER,
+            ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
+        """)
+        # Ensure query_logs has deprecation columns
+        cur.execute("""
+            ALTER TABLE query_logs
+            ADD COLUMN IF NOT EXISTS is_response_deprecated BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS corrected_response TEXT
+        """)
+        conn.commit()
+        print("✅ Startup migrations applied successfully.")
+    except Exception as e:
+        print(f"⚠️ Migration Warning: {e}")
+    finally:
+        conn.close()
+
+run_startup_migrations()
+
 @app.route('/', methods=['GET'])
 def health_check():
     # This ensures the background script gets valid JSON instead of an HTML error

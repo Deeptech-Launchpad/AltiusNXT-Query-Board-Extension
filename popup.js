@@ -2,7 +2,22 @@ document.addEventListener("DOMContentLoaded", function () {
   // ======================================================
   // 1. INITIALIZATION & CONFIG
   // ======================================================
-  const API_URL = "https://qb.altiusnxt.tech/api";
+  const LIVE_URL = "https://qb.altiusnxt.tech/api";
+  const LOCAL_URL = "http://localhost:5005/api";
+  let API_URL = LIVE_URL; // Default to live server
+
+  // Smart server detection: tries live first, falls back to local
+  async function detectServer() {
+    try {
+      const res = await fetch(LIVE_URL.replace('/api', ''), { method: 'GET', signal: AbortSignal.timeout(3000) });
+      if (res.ok) { API_URL = LIVE_URL; return; }
+    } catch (e) {}
+    try {
+      const res = await fetch(LOCAL_URL.replace('/api', ''), { method: 'GET', signal: AbortSignal.timeout(3000) });
+      if (res.ok) { API_URL = LOCAL_URL; return; }
+    } catch (e) {}
+  }
+
   let currentUserEmail = "";
   let currentUserRole = "";
   let currentUserIsAdmin = false;
@@ -69,7 +84,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const urlField = document.getElementById("urlField");
   const submitBtn = document.getElementById("submitBtn");
 
-  function initApp() {
+  async function initApp() {
+    await detectServer(); // Auto-detect live or local server
     loadProjects();
     batchInput.disabled = true;
     categoryInput.disabled = true;

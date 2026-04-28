@@ -15,6 +15,7 @@
     "https://qb.altiusnxt.com/*",
     "http://qb.altiusnxt.tech/*",
     "https://qb.altiusnxt.tech/*",
+    "http://localhost:5005/*",
     "https://api.languagetool.org/*" 
   ],
   "background": {
@@ -58,6 +59,6 @@
     }
   ],
  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://qb.altiusnxt.com http://qb.altiusnxt.tech https://qb.altiusnxt.tech https://api.languagetool.org; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://qb.altiusnxt.com http://qb.altiusnxt.tech https://qb.altiusnxt.tech http://localhost:5005 https://api.languagetool.org; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com;"
 }
 }

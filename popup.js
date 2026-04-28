@@ -4,19 +4,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ======================================================
   const LIVE_URL = "https://qb.altiusnxt.tech/api";
   const LOCAL_URL = "http://localhost:5005/api";
-  let API_URL = LIVE_URL; // Default to live server
-
-  // Smart server detection: tries live first, falls back to local
-  async function detectServer() {
-    try {
-      const res = await fetch(LIVE_URL.replace('/api', ''), { method: 'GET', signal: AbortSignal.timeout(3000) });
-      if (res.ok) { API_URL = LIVE_URL; return; }
-    } catch (e) {}
-    try {
-      const res = await fetch(LOCAL_URL.replace('/api', ''), { method: 'GET', signal: AbortSignal.timeout(3000) });
-      if (res.ok) { API_URL = LOCAL_URL; return; }
-    } catch (e) {}
-  }
+  let API_URL = LOCAL_URL; // LOCAL TESTING MODE
 
   let currentUserEmail = "";
   let currentUserRole = "";
@@ -85,7 +73,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const submitBtn = document.getElementById("submitBtn");
 
   async function initApp() {
-    await detectServer(); // Auto-detect live or local server
     loadProjects();
     batchInput.disabled = true;
     categoryInput.disabled = true;
@@ -2111,10 +2098,39 @@ document.addEventListener("DOMContentLoaded", function () {
           const responderEmailDisplay = item.answered_by ? `<div style="margin-top:8px; padding-top:6px; border-top:1px dashed #cce5ff; font-size:10px; color:#555; text-align:right;"><i class="fas fa-user-check" style="color:#27ae60;"></i> Res: <strong>${item.answered_by}</strong></div>` : "";
           let productInfoHTML = ((item.sku_id && item.sku_id !== "nan") || (item.mfr_part_number && item.mfr_part_number !== "nan")) ? `<div style="margin-top:8px; padding:10px; background:#f8f9fa; border-radius:6px; border:1px solid #e1e4e8; font-size:11px; line-height: 1.6;">${item.manufacturer ? `<div><strong>Mfr:</strong> ${item.manufacturer}</div>` : ""}${item.mfr_part_number ? `<div><strong>MPN:</strong> ${item.mfr_part_number}</div>` : ""}${item.sku_id ? `<div><strong>SKU ID:</strong> ${item.sku_id}</div>` : ""}</div>` : "";
           let refLinkHTML = (item.url && item.url.trim() !== "" && item.url !== "nan") ? `${productInfoHTML}<div style="margin-top:8px; padding-top:6px; border-top:1px dashed #3498db; font-size:11px;"><a href="${item.url}" target="_blank" style="color:#2980b9; text-decoration:none; font-weight:600;"><i class="fas fa-external-link-alt"></i> View Reference Link</a></div>` : productInfoHTML;
-          
-          // INJECTING BOX BELOW REFERENCE LINK
-          answerHTML = `<div class="result-response" style="margin-top:8px; position:relative;"><strong>A:</strong> ${item.response}${refLinkHTML}${decisionRefBox}${attachmentHTML}${responderEmailDisplay}</div>`;
+
+          // --- STRIKE / DEPRECATED RESPONSE DISPLAY ---
+          const isDeprecated = item.is_response_deprecated === true;
+          const hasCorrected = item.corrected_response && item.corrected_response.trim() !== "";
+
+          // Strike button: only visible to admin who answered this query, when not yet deprecated
+          const canStrike = currentUserIsAdmin && !isDeprecated;
+          const strikeBtn = canStrike ? `<button class="strike-response-btn action-btn" data-id="${item.id}" title="Mark response as Not in Use" style="background:#c0392b; font-size:10px; padding:4px 8px; margin-top:8px; display:inline-flex; align-items:center; gap:4px;"><i class="fas fa-strikethrough"></i> Strike</button>` : "";
+
+          // Build the response body
+          let responseBody = "";
+          if (isDeprecated) {
+            // Struck-through old response
+            responseBody += `<div style="text-decoration:line-through; color:#999; font-size:13px; background:#fff5f5; padding:6px 8px; border-radius:5px; border:1px solid #fcc;">${item.response}</div>`;
+            responseBody += `<div style="font-size:10px; color:#e74c3c; font-weight:600; margin:2px 0 8px 2px;"><i class="fas fa-ban"></i> ⚠ Do Not Use</div>`;
+            if (hasCorrected) {
+              responseBody += `<div style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:5px; padding:8px; font-size:13px; color:#1a5276; margin-top:4px;"><strong><i class="fas fa-check-circle" style="color:#27ae60;"></i> Corrected Response:</strong><br>${item.corrected_response}</div>`;
+            }
+            // Admin can still add corrected response if not done yet
+            if (currentUserIsAdmin && !hasCorrected) {
+              responseBody += `
+                <div style="margin-top:8px;">
+                  <textarea id="corrected-input-${item.id}" placeholder="Enter the corrected response..." style="width:100%; padding:6px; font-size:12px; border:1px solid #aaa; border-radius:5px; resize:vertical; min-height:60px;"></textarea>
+                  <button class="save-corrected-btn action-btn" data-id="${item.id}" style="margin-top:4px; background:#27ae60; font-size:11px; padding:4px 10px;"><i class="fas fa-save"></i> Save Corrected Response</button>
+                </div>`;
+            }
+          } else {
+            responseBody = item.response;
+          }
+
+          answerHTML = `<div class="result-response" style="margin-top:8px; position:relative;"><strong>A:</strong> ${responseBody}${refLinkHTML}${decisionRefBox}${attachmentHTML}${responderEmailDisplay}${strikeBtn}</div>`;
         }
+
 
         card.innerHTML = `
             ${contextHeader}
@@ -2177,7 +2193,53 @@ document.addEventListener("DOMContentLoaded", function () {
     resultsContainer.querySelectorAll(".escalate-btn").forEach((btn) => {
       btn.addEventListener("click", function () { const qId = this.getAttribute("data-id"); const select = document.getElementById(`escalate-select-${qId}`); escalateQuery(qId, select.value); });
     });
+
+    // --- STRIKE BUTTON LISTENER ---
+    resultsContainer.querySelectorAll(".strike-response-btn").forEach((btn) => {
+      btn.addEventListener("click", function () {
+        const qId = this.getAttribute("data-id");
+        if (!confirm("Are you sure you want to move this response to \"Not in Use\"?\nYou won't be able to undo this action later.")) return;
+        fetch(`${API_URL}/deprecate_response/${qId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userEmail: currentUserEmail })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "success") {
+            // Refresh the history view
+            updateUserButtonState(currentUserEmail);
+          } else {
+            alert("Error: " + data.message);
+          }
+        });
+      });
+    });
+
+    // --- SAVE CORRECTED RESPONSE LISTENER ---
+    resultsContainer.querySelectorAll(".save-corrected-btn").forEach((btn) => {
+      btn.addEventListener("click", function () {
+        const qId = this.getAttribute("data-id");
+        const correctedText = document.getElementById(`corrected-input-${qId}`).value.trim();
+        if (!correctedText) { alert("Please enter a corrected response."); return; }
+        fetch(`${API_URL}/correct_response/${qId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userEmail: currentUserEmail, correctedResponse: correctedText })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "success") {
+            alert("Corrected response saved!");
+            updateUserButtonState(currentUserEmail);
+          } else {
+            alert("Error: " + data.message);
+          }
+        });
+      });
+    });
 }
+
 
   // --- CREATE DECISION FORM ---
   function showCreateDecisionForm() {

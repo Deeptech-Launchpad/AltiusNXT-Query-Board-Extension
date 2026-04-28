@@ -386,7 +386,9 @@ def get_my_history():
         SELECT id, custom_query_id, project_name, batch_name, category, attribute_name, 
                query_text as query, response_text as response, status, reference_url as url,
                attachment_url, attachment_type, answered_by,
-               sku_id, mfr_part_number, manufacturer
+               sku_id, mfr_part_number, manufacturer,
+               COALESCE(is_response_deprecated, FALSE) as is_response_deprecated,
+               corrected_response
         FROM query_logs 
         WHERE user_email = %s
         ORDER BY created_at DESC
@@ -999,6 +1001,68 @@ def respond_query():
     if result:
         create_system_notification(result[0], f"Response Received for: {result[1][:30]}...", int(query_id))
     return jsonify({"status": "success"})
+
+@app.route('/api/deprecate_response/<int:query_id>', methods=['POST'])
+def deprecate_response(query_id):
+    """Mark a response as deprecated (struck-through / Not in Use)."""
+    data = request.json
+    admin_email = data.get('userEmail', '').lower()
+
+    if admin_email not in ADMIN_EMAILS:
+        return jsonify({"status": "error", "message": "Unauthorized"}), 403
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        # Ensure columns exist (safe to run every time)
+        cur.execute("""
+            ALTER TABLE query_logs
+            ADD COLUMN IF NOT EXISTS is_response_deprecated BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS corrected_response TEXT
+        """)
+        cur.execute("""
+            UPDATE query_logs
+            SET is_response_deprecated = TRUE, updated_at = NOW()
+            WHERE id = %s
+        """, (query_id,))
+        conn.commit()
+        return jsonify({"status": "success", "message": "Response marked as deprecated."})
+    except Exception as e:
+        print(f"Deprecate Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/correct_response/<int:query_id>', methods=['POST'])
+def correct_response(query_id):
+    """Add a corrected response after the old one is deprecated."""
+    data = request.json
+    admin_email = data.get('userEmail', '').lower()
+    new_response = data.get('correctedResponse', '').strip()
+
+    if admin_email not in ADMIN_EMAILS:
+        return jsonify({"status": "error", "message": "Unauthorized"}), 403
+
+    if not new_response:
+        return jsonify({"status": "error", "message": "Corrected response cannot be empty."}), 400
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE query_logs
+            SET corrected_response = %s, updated_at = NOW()
+            WHERE id = %s
+        """, (new_response, query_id))
+        conn.commit()
+        return jsonify({"status": "success", "message": "Corrected response saved."})
+    except Exception as e:
+        print(f"Correct Response Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        conn.close()
+
 
 @app.route('/api/edit_query', methods=['POST'])
 def edit_query():

@@ -2102,8 +2102,6 @@ document.addEventListener("DOMContentLoaded", function () {
           // --- STRIKE / DEPRECATED RESPONSE DISPLAY ---
           const isDeprecated = item.is_response_deprecated === true;
           const hasCorrected = item.corrected_response && item.corrected_response.trim() !== "";
-          // DEBUG: Remove after fix
-          console.log(`[DEBUG] Query ID: ${item.id} | is_response_deprecated raw:`, item.is_response_deprecated, `| isDeprecated:`, isDeprecated);
 
           // Strike button: only visible to admin who answered this query, when not yet deprecated
           const canStrike = currentUserIsAdmin && !isDeprecated;

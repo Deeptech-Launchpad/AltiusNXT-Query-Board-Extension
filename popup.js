@@ -2207,8 +2207,7 @@ document.addEventListener("DOMContentLoaded", function () {
         .then(res => res.json())
         .then(data => {
           if (data.status === "success") {
-            // Refresh the history view
-            updateUserButtonState(currentUserEmail);
+            fetchUserHistory(); // Refresh history to show strikethrough
           } else {
             alert("Error: " + data.message);
           }
@@ -2230,8 +2229,7 @@ document.addEventListener("DOMContentLoaded", function () {
         .then(res => res.json())
         .then(data => {
           if (data.status === "success") {
-            alert("Corrected response saved!");
-            updateUserButtonState(currentUserEmail);
+            fetchUserHistory(); // Refresh to show corrected response
           } else {
             alert("Error: " + data.message);
           }

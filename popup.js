@@ -809,6 +809,8 @@ document.addEventListener("DOMContentLoaded", function () {
         // UPDATED LOGIC: Allow all admin roles to see the dashboard and export features
         if (data.is_admin || adminRoles.includes(data.role)) {
           initAdminButton();
+          initAdminWorkHistoryBtn(); // Show "My Work History" briefcase button
+          initUserButton();          // Show "My Queries" button for admins too
           const adminExportContainer = document.getElementById(
             "admin-export-container",
           );
@@ -1114,8 +1116,86 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // ======================================================
-  // 10. MAIN ACTION HANDLERS
+  // ADMIN WORK HISTORY (Queries Responded & Forwarded)
   // ======================================================
+  function initAdminWorkHistoryBtn() {
+    const btn = document.getElementById("adminWorkHistoryBtn");
+    if (!btn || !currentUserIsAdmin) return;
+    btn.style.display = "flex";
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener("click", () => fetchAdminHistory());
+  }
+
+  function fetchAdminHistory() {
+    resultsContainer.innerHTML = '<p style="text-align:center;">Loading your work history...</p>';
+    resultsOverlay.style.display = "flex";
+    resultsTitle.innerText = "My Work History";
+    if (searchContext) searchContext.innerText = currentUserEmail;
+
+    fetch(`${API_URL}/admin_history`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userEmail: currentUserEmail }),
+    })
+    .then(res => res.json())
+    .then(data => {
+      resultsContainer.innerHTML = "";
+
+      // --- SECTION 1: Responses I Gave ---
+      const respondedHeader = document.createElement("h4");
+      respondedHeader.style.cssText = "margin:10px 0; color:#27ae60; border-bottom:2px solid #27ae60; padding-bottom:5px; font-size:13px;";
+      respondedHeader.innerHTML = '<i class="fas fa-reply-all"></i> Responses I Gave (' + (data.responded || []).length + ')';
+      resultsContainer.appendChild(respondedHeader);
+
+      if (data.responded && data.responded.length > 0) {
+        renderResults(data.responded, "user_history");
+      } else {
+        const empty = document.createElement("p");
+        empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
+        empty.innerHTML = '<i class="fas fa-inbox"></i> No responses given yet.';
+        resultsContainer.appendChild(empty);
+      }
+
+      // --- SECTION 2: Queries I Assigned/Forwarded ---
+      const forwardedHeader = document.createElement("h4");
+      forwardedHeader.style.cssText = "margin:20px 0 10px 0; color:#e67e22; border-bottom:2px solid #e67e22; padding-bottom:5px; font-size:13px;";
+      forwardedHeader.innerHTML = '<i class="fas fa-share"></i> Queries I Assigned (Pending) (' + (data.forwarded || []).length + ')';
+      resultsContainer.appendChild(forwardedHeader);
+
+      if (data.forwarded && data.forwarded.length > 0) {
+        data.forwarded.forEach(item => {
+          const card = document.createElement("div");
+          card.className = "result-item";
+          card.style.borderLeft = "4px solid #e67e22";
+          card.innerHTML = `
+            <div style="font-size:10px; color:#777; margin-bottom:4px;">
+              <strong>Project:</strong> ${item.project_name || 'N/A'} | <strong>Cat:</strong> ${item.category || 'N/A'}
+            </div>
+            <div style="font-size:13px; color:#222;"><strong>Q:</strong> ${item.query}</div>
+            <div style="margin-top:6px; display:flex; gap:8px; font-size:11px; flex-wrap:wrap;">
+              <span style="background:#fef5e7; color:#e67e22; padding:2px 8px; border-radius:10px; font-weight:600;">
+                <i class="fas fa-arrow-right"></i> Assigned to: ${item.recipient_type || 'N/A'}
+              </span>
+              <span style="background:#f0f0f0; color:#555; padding:2px 8px; border-radius:10px;">
+                <i class="fas fa-user"></i> Asker: ${item.asker_email || 'N/A'}
+              </span>
+            </div>`;
+          resultsContainer.appendChild(card);
+        });
+      } else {
+        const empty = document.createElement("p");
+        empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
+        empty.innerHTML = '<i class="fas fa-check-circle"></i> No pending assigned queries.';
+        resultsContainer.appendChild(empty);
+      }
+    })
+    .catch(err => {
+      resultsContainer.innerHTML = '<p style="text-align:center; color:red;">Failed to load work history.</p>';
+    });
+  }
+
+
 
   // --- KNOWLEDGE BASE FULL UPDATED LOGIC ---
   const kbBtn = document.getElementById('kbBtn');

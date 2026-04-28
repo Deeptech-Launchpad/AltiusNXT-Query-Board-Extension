@@ -1002,6 +1002,58 @@ def escalate_query():
     finally:
         conn.close()
 
+@app.route('/api/admin_history', methods=['POST'])
+def get_admin_history():
+    """Returns queries the admin responded to or forwarded."""
+    data = request.json
+    email = data.get('userEmail', '').strip().lower()
+
+    if email not in ADMIN_EMAILS:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # 1. Queries admin RESPONDED to (answered_by = email)
+    cur.execute("""
+        SELECT id, custom_query_id, project_name, batch_name, category, attribute_name,
+               query_text as query, response_text as response, status,
+               reference_url as url, attachment_url, attachment_type,
+               user_email as asker_email, answered_by, recipient_type,
+               sku_id, mfr_part_number, manufacturer,
+               COALESCE(is_response_deprecated, FALSE) as is_response_deprecated,
+               corrected_response, updated_at
+        FROM query_logs
+        WHERE answered_by = %s
+        ORDER BY updated_at DESC NULLS LAST
+    """, (email,))
+    responded = cur.fetchall()
+    for q in responded:
+        q['admin_history_type'] = 'responded'
+        q['is_admin_view'] = False
+        q['is_user_view'] = True
+
+    # 2. Queries admin FORWARDED/ASSIGNED (forwarded_by = email, not yet closed)
+    cur.execute("""
+        SELECT id, custom_query_id, project_name, batch_name, category, attribute_name,
+               query_text as query, response_text as response, status,
+               reference_url as url, user_email as asker_email,
+               recipient_type, forwarded_by,
+               sku_id, mfr_part_number, manufacturer, updated_at
+        FROM query_logs
+        WHERE forwarded_by = %s AND answered_by IS NULL
+        ORDER BY updated_at DESC NULLS LAST
+    """, (email,))
+    forwarded = cur.fetchall()
+    for q in forwarded:
+        q['admin_history_type'] = 'forwarded'
+        q['is_admin_view'] = False
+        q['is_user_view'] = False
+
+    conn.close()
+    return jsonify({"responded": responded, "forwarded": forwarded})
+
+
 @app.route('/api/respond', methods=['POST'])
 def respond_query():
     responder_email = request.form.get('responderEmail', '').lower()

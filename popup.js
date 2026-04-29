@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ======================================================
   const LIVE_URL = "https://qb.altiusnxt.tech/api";
   const LOCAL_URL = "http://localhost:5005/api";
-  let API_URL = LOCAL_URL; // LOCAL TESTING MODE
+  let API_URL = LIVE_URL; // LIVE MODE
 
   let currentUserEmail = "";
   let currentUserRole = "";

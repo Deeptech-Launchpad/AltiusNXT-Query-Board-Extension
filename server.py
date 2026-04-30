@@ -89,8 +89,8 @@ DB_CONFIG = {
 # --- 1. CONFIGURATION & ROLE LISTS ---
 def get_email_list(key):
     raw = os.getenv(key, '')
-    # Splits comma-separated strings into a clean list
-    return [email.strip().lower() for email in raw.split(',') if email.strip()]
+    # Splits comma-separated strings into a clean list, stripping quotes and spaces
+    return [email.strip().strip('"').strip("'").lower() for email in raw.split(',') if email.strip()]
 
 # Define role-specific lists using the helper function
 TL_LIST = get_email_list('TL_EMAILS')

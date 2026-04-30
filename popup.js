@@ -86,7 +86,8 @@ document.addEventListener("DOMContentLoaded", function () {
       function (info) {
         // Only proceed if a valid email is found
         if (info && info.email && info.email.trim() !== "") {
-          currentUserEmail = info.email;
+          currentUserEmail = info.email.toLowerCase();
+          console.log("[DEBUG] Detected Email:", currentUserEmail);
           checkRolesAndInitButtons(currentUserEmail);
           logUserAction("Just Opened");
         } else {

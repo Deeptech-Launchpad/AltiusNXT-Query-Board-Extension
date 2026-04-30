@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let currentUserEmail = "";
   let currentUserRole = "";
   let currentUserIsAdmin = false;
+  let currentView = "search"; // Track current active view for refreshes (search, user_history, admin_dashboard, admin_work_history)
 
   // GLOBAL DATA LISTS
   let allProjects = [];
@@ -20,17 +21,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const today = new Date().toISOString().split('T')[0];
 
-    // Disable future dates for History Search
-    const startInput = document.getElementById('startDate');
-    const endInput = document.getElementById('endDate');
-    if (startInput) startInput.setAttribute('max', today);
-    if (endInput) endInput.setAttribute('max', today);
+  // Disable future dates for History Search
+  const startInput = document.getElementById('startDate');
+  const endInput = document.getElementById('endDate');
+  if (startInput) startInput.setAttribute('max', today);
+  if (endInput) endInput.setAttribute('max', today);
 
-    // Disable future dates for Export Logs
-    const expStart = document.getElementById('exportStartDate');
-    const expEnd = document.getElementById('exportEndDate');
-    if (expStart) expStart.setAttribute('max', today);
-    if (expEnd) expEnd.setAttribute('max', today);
+  // Disable future dates for Export Logs
+  const expStart = document.getElementById('exportStartDate');
+  const expEnd = document.getElementById('exportEndDate');
+  if (expStart) expStart.setAttribute('max', today);
+  if (expEnd) expEnd.setAttribute('max', today);
 
   // --- DOM ELEMENTS ---
   chrome.runtime.sendMessage({ action: "clear_badge" });
@@ -108,27 +109,27 @@ document.addEventListener("DOMContentLoaded", function () {
   // 2. HELPER FUNCTIONS
   // ======================================================
 
-    if (expStart && expEnd) {
-        // Step A: Disable future dates globally
-        expStart.setAttribute('max', today);
-        expEnd.setAttribute('max', today);
+  if (expStart && expEnd) {
+    // Step A: Disable future dates globally
+    expStart.setAttribute('max', today);
+    expEnd.setAttribute('max', today);
 
-        // Step B: Real-time validation for "From" Date
-        expStart.addEventListener('change', () => {
-            if (expEnd.value && new Date(expStart.value) > new Date(expEnd.value)) {
-                alert("The 'From' date cannot be later than the 'To' date. Resetting selection.");
-                expStart.value = ""; // Clear the invalid input immediately
-            }
-        });
+    // Step B: Real-time validation for "From" Date
+    expStart.addEventListener('change', () => {
+      if (expEnd.value && new Date(expStart.value) > new Date(expEnd.value)) {
+        alert("The 'From' date cannot be later than the 'To' date. Resetting selection.");
+        expStart.value = ""; // Clear the invalid input immediately
+      }
+    });
 
-        // Step C: Real-time validation for "To" Date
-        expEnd.addEventListener('change', () => {
-            if (expStart.value && new Date(expEnd.value) < new Date(expStart.value)) {
-                alert("The 'To' date cannot be earlier than the 'From' date. Resetting selection.");
-                expEnd.value = ""; // Clear the invalid input immediately
-            }
-        });
-    }
+    // Step C: Real-time validation for "To" Date
+    expEnd.addEventListener('change', () => {
+      if (expStart.value && new Date(expEnd.value) < new Date(expStart.value)) {
+        alert("The 'To' date cannot be earlier than the 'From' date. Resetting selection.");
+        expEnd.value = ""; // Clear the invalid input immediately
+      }
+    });
+  }
 
   function updateMainButton() {
     if (!categoryInput) return;
@@ -848,13 +849,13 @@ document.addEventListener("DOMContentLoaded", function () {
     .addEventListener("click", function () {
       // Direct link to your AWS server API
       const downloadUrl = `${API_URL}/download_schema_template`;
-      
+
       // Trigger the download via the browser
       window.open(downloadUrl, '_blank');
-      
+
       // Log the activity
       logUserAction("KB Log", {
-          query_id: "Downloaded Schema Template"
+        query_id: "Downloaded Schema Template"
       });
     });
 
@@ -935,6 +936,7 @@ document.addEventListener("DOMContentLoaded", function () {
       '<p style="text-align:center;">Loading your history...</p>';
     resultsOverlay.style.display = "flex";
     resultsTitle.innerText = "My Query History";
+    currentView = "user_history";
     if (searchContext) searchContext.innerText = currentUserEmail;
 
     fetch(`${API_URL}/my_history`, {
@@ -1050,6 +1052,7 @@ document.addEventListener("DOMContentLoaded", function () {
       '<p style="text-align:center;">Loading dashboard...</p>';
     resultsOverlay.style.display = "flex";
     resultsTitle.innerText = `${currentUserRole} Dashboard`;
+    currentView = "admin_dashboard";
 
     const pendingPromise = fetch(`${API_URL}/pending_queries`, {
       method: "POST",
@@ -1098,7 +1101,7 @@ document.addEventListener("DOMContentLoaded", function () {
           '<i class="fas fa-user-edit"></i> My Asked Queries';
         resultsContainer.appendChild(historyHeader);
 
-        if (historyData.length > 0) renderResults(historyData, "user_history");
+        if (historyData.length > 0) renderResults(historyData, "user_history", true);
 
         const pendingHeader = document.createElement("h4");
         pendingHeader.style.cssText =
@@ -1108,7 +1111,7 @@ document.addEventListener("DOMContentLoaded", function () {
         resultsContainer.appendChild(pendingHeader);
 
         if (pendingData.length > 0)
-          renderResults(pendingData, "admin_dashboard");
+          renderResults(pendingData, "admin_dashboard", true);
 
         updateAdminButtonState();
       },
@@ -1140,13 +1143,14 @@ document.addEventListener("DOMContentLoaded", function () {
         freshBtn.style.background = "#f39c12"; // Orange alert: new response
         freshBtn.title = "New response to your query!";
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }
 
   function fetchAdminHistory() {
     resultsContainer.innerHTML = '<p style="text-align:center;">Loading your work history...</p>';
     resultsOverlay.style.display = "flex";
     resultsTitle.innerText = "My Work History";
+    currentView = "admin_work_history";
     if (searchContext) searchContext.innerText = currentUserEmail;
 
     // Reset button color back to purple (no longer alerting)
@@ -1166,56 +1170,56 @@ document.addEventListener("DOMContentLoaded", function () {
     }).then(r => r.json());
 
     Promise.all([adminHistoryPromise, myAskedPromise])
-    .then(([data, askedData]) => {
-      resultsContainer.innerHTML = "";
+      .then(([data, askedData]) => {
+        resultsContainer.innerHTML = "";
 
-      // Mark asked query responses as seen
-      const seenIds = JSON.parse(localStorage.getItem("seen_query_ids") || "[]");
-      askedData.forEach(q => { if (!seenIds.includes(q.id)) seenIds.push(q.id); });
-      localStorage.setItem("seen_query_ids", JSON.stringify(seenIds));
+        // Mark asked query responses as seen
+        const seenIds = JSON.parse(localStorage.getItem("seen_query_ids") || "[]");
+        askedData.forEach(q => { if (!seenIds.includes(q.id)) seenIds.push(q.id); });
+        localStorage.setItem("seen_query_ids", JSON.stringify(seenIds));
 
-      // --- SECTION 1: Queries I Asked (with responses) ---
-      const askedHeader = document.createElement("h4");
-      askedHeader.style.cssText = "margin:10px 0; color:#2980b9; border-bottom:2px solid #3498db; padding-bottom:5px; font-size:13px;";
-      askedHeader.innerHTML = '<i class="fas fa-question-circle"></i> Queries I Asked (' + (askedData || []).length + ')';
-      resultsContainer.appendChild(askedHeader);
+        // --- SECTION 1: Queries I Asked (with responses) ---
+        const askedHeader = document.createElement("h4");
+        askedHeader.style.cssText = "margin:10px 0; color:#2980b9; border-bottom:2px solid #3498db; padding-bottom:5px; font-size:13px;";
+        askedHeader.innerHTML = '<i class="fas fa-question-circle"></i> Queries I Asked (' + (askedData || []).length + ')';
+        resultsContainer.appendChild(askedHeader);
 
-      if (askedData && askedData.length > 0) {
-        renderResults(askedData, "user_history");
-      } else {
-        const empty = document.createElement("p");
-        empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
-        empty.innerHTML = '<i class="fas fa-inbox"></i> No queries asked yet.';
-        resultsContainer.appendChild(empty);
-      }
+        if (askedData && askedData.length > 0) {
+          renderResults(askedData, "user_history", true);
+        } else {
+          const empty = document.createElement("p");
+          empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
+          empty.innerHTML = '<i class="fas fa-inbox"></i> No queries asked yet.';
+          resultsContainer.appendChild(empty);
+        }
 
-      // --- SECTION 2: Responses I Gave ---
-      const respondedHeader = document.createElement("h4");
-      respondedHeader.style.cssText = "margin:20px 0 10px 0; color:#27ae60; border-bottom:2px solid #27ae60; padding-bottom:5px; font-size:13px;";
-      respondedHeader.innerHTML = '<i class="fas fa-reply-all"></i> Responses I Gave (' + (data.responded || []).length + ')';
-      resultsContainer.appendChild(respondedHeader);
+        // --- SECTION 2: Responses I Gave ---
+        const respondedHeader = document.createElement("h4");
+        respondedHeader.style.cssText = "margin:20px 0 10px 0; color:#27ae60; border-bottom:2px solid #27ae60; padding-bottom:5px; font-size:13px;";
+        respondedHeader.innerHTML = '<i class="fas fa-reply-all"></i> Responses I Gave (' + (data.responded || []).length + ')';
+        resultsContainer.appendChild(respondedHeader);
 
-      if (data.responded && data.responded.length > 0) {
-        renderResults(data.responded, "user_history");
-      } else {
-        const empty = document.createElement("p");
-        empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
-        empty.innerHTML = '<i class="fas fa-inbox"></i> No responses given yet.';
-        resultsContainer.appendChild(empty);
-      }
+        if (data.responded && data.responded.length > 0) {
+          renderResults(data.responded, "user_history", true);
+        } else {
+          const empty = document.createElement("p");
+          empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
+          empty.innerHTML = '<i class="fas fa-inbox"></i> No responses given yet.';
+          resultsContainer.appendChild(empty);
+        }
 
-      // --- SECTION 3: Queries I Assigned/Forwarded ---
-      const forwardedHeader = document.createElement("h4");
-      forwardedHeader.style.cssText = "margin:20px 0 10px 0; color:#e67e22; border-bottom:2px solid #e67e22; padding-bottom:5px; font-size:13px;";
-      forwardedHeader.innerHTML = '<i class="fas fa-share"></i> Queries I Assigned (Pending) (' + (data.forwarded || []).length + ')';
-      resultsContainer.appendChild(forwardedHeader);
+        // --- SECTION 3: Queries I Assigned/Forwarded ---
+        const forwardedHeader = document.createElement("h4");
+        forwardedHeader.style.cssText = "margin:20px 0 10px 0; color:#e67e22; border-bottom:2px solid #e67e22; padding-bottom:5px; font-size:13px;";
+        forwardedHeader.innerHTML = '<i class="fas fa-share"></i> Queries I Assigned (Pending) (' + (data.forwarded || []).length + ')';
+        resultsContainer.appendChild(forwardedHeader);
 
-      if (data.forwarded && data.forwarded.length > 0) {
-        data.forwarded.forEach(item => {
-          const card = document.createElement("div");
-          card.className = "result-item";
-          card.style.borderLeft = "4px solid #e67e22";
-          card.innerHTML = `
+        if (data.forwarded && data.forwarded.length > 0) {
+          data.forwarded.forEach(item => {
+            const card = document.createElement("div");
+            card.className = "result-item";
+            card.style.borderLeft = "4px solid #e67e22";
+            card.innerHTML = `
             <div style="font-size:10px; color:#777; margin-bottom:4px;">
               <strong>Project:</strong> ${item.project_name || 'N/A'} | <strong>Cat:</strong> ${item.category || 'N/A'}
             </div>
@@ -1228,18 +1232,27 @@ document.addEventListener("DOMContentLoaded", function () {
                 <i class="fas fa-user"></i> Asker: ${item.asker_email || 'N/A'}
               </span>
             </div>`;
-          resultsContainer.appendChild(card);
-        });
-      } else {
-        const empty = document.createElement("p");
-        empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
-        empty.innerHTML = '<i class="fas fa-check-circle"></i> No pending assigned queries.';
-        resultsContainer.appendChild(empty);
-      }
-    })
-    .catch(() => {
-      resultsContainer.innerHTML = '<p style="text-align:center; color:red;">Failed to load work history.</p>';
-    });
+            resultsContainer.appendChild(card);
+          });
+        } else {
+          const empty = document.createElement("p");
+          empty.style.cssText = "text-align:center; color:#999; font-size:12px; padding:10px;";
+          empty.innerHTML = '<i class="fas fa-check-circle"></i> No pending assigned queries.';
+          resultsContainer.appendChild(empty);
+        }
+      })
+      .catch(() => {
+        resultsContainer.innerHTML = '<p style="text-align:center; color:red;">Failed to load work history.</p>';
+      });
+  }
+
+  function refreshCurrentView() {
+    if (currentView === "admin_work_history") fetchAdminHistory();
+    else if (currentView === "admin_dashboard") fetchPendingQueries();
+    else if (currentView === "user_history") fetchUserHistory();
+    else if (currentView === "search") performValidation("query"); // Default to last search
+    else if (currentUserIsAdmin) fetchAdminHistory(); // Better fallback for admins
+    else fetchUserHistory(); // Fallback for regular users
   }
 
 
@@ -1254,148 +1267,148 @@ document.addEventListener("DOMContentLoaded", function () {
   const kbAttributesContainer = document.getElementById('kbAttributesContainer');
   const kbActionButtons = document.getElementById('kbActionButtons');
 
-  let kbCategories = []; 
+  let kbCategories = [];
 
   // 1. Initialize & Open
   if (kbBtn) {
-      kbBtn.addEventListener('click', () => {
-          if (kbOverlay) kbOverlay.style.display = 'flex';
-          if (kbProjectInput) kbProjectInput.value = "";
-          logUserAction("KB Log");
-          if (kbCategoryInput) {
-              kbCategoryInput.value = "";
-              kbCategoryInput.disabled = true;
-          }
-          if (kbAttributesContainer) {
-              kbAttributesContainer.innerHTML = '<p style="text-align: center; color: #999; font-size: 12px; margin-top: 50px;">Select a category to view attributes</p>';
-          }
-          if (kbActionButtons) kbActionButtons.innerHTML = "";
-      });
+    kbBtn.addEventListener('click', () => {
+      if (kbOverlay) kbOverlay.style.display = 'flex';
+      if (kbProjectInput) kbProjectInput.value = "";
+      logUserAction("KB Log");
+      if (kbCategoryInput) {
+        kbCategoryInput.value = "";
+        kbCategoryInput.disabled = true;
+      }
+      if (kbAttributesContainer) {
+        kbAttributesContainer.innerHTML = '<p style="text-align: center; color: #999; font-size: 12px; margin-top: 50px;">Select a category to view attributes</p>';
+      }
+      if (kbActionButtons) kbActionButtons.innerHTML = "";
+    });
   }
 
   // Close Button Fix
   const closeKbOverlay = document.getElementById('closeKbOverlay');
   if (closeKbOverlay) {
-      closeKbOverlay.addEventListener('click', () => {
-          if (kbOverlay) kbOverlay.style.display = 'none';
-      });
+    closeKbOverlay.addEventListener('click', () => {
+      if (kbOverlay) kbOverlay.style.display = 'none';
+    });
   }
 
   // 2. Project Search Logic
   if (kbProjectInput) {
     // 1. Trigger list when clicking or focusing on the box
-    kbProjectInput.addEventListener('focus', function() {
-        this.dispatchEvent(new Event('input'));
+    kbProjectInput.addEventListener('focus', function () {
+      this.dispatchEvent(new Event('input'));
     });
 
-    kbProjectInput.addEventListener('input', function() {
-        autoResize(this);
-        const searchText = this.value.toLowerCase();
-        
-        // Show all projects if search is empty, otherwise filter
-        const filtered = searchText === "" 
-            ? allProjects 
-            : allProjects.filter(p => p.toLowerCase().includes(searchText));
-        
-        if (kbProjectList) {
-            kbProjectList.innerHTML = "";
-            
-            if (filtered.length > 0) {
-                kbProjectList.style.display = 'block';
-                
-                // Set a high z-index and ensure visibility
-                kbProjectList.style.zIndex = "10002"; 
+    kbProjectInput.addEventListener('input', function () {
+      autoResize(this);
+      const searchText = this.value.toLowerCase();
 
-                filtered.forEach(proj => {
-                    const item = document.createElement('div');
-                    item.className = 'dropdown-item';
-                    item.textContent = proj;
-                    
-                    // Style matching your existing dropdowns
-                    item.style.padding = "10px";
-                    item.style.cursor = "pointer";
+      // Show all projects if search is empty, otherwise filter
+      const filtered = searchText === ""
+        ? allProjects
+        : allProjects.filter(p => p.toLowerCase().includes(searchText));
 
-                    item.onclick = () => {
-                        kbProjectInput.value = proj;
-                        kbProjectList.style.display = 'none';
-                        autoResize(kbProjectInput);
-                        
-                        // Proceed to fetch categories
-                        kbFetchCategories(proj); 
-                    };
-                    kbProjectList.appendChild(item);
-                });
-            } else {
-                kbProjectList.style.display = 'none';
-            }
+      if (kbProjectList) {
+        kbProjectList.innerHTML = "";
+
+        if (filtered.length > 0) {
+          kbProjectList.style.display = 'block';
+
+          // Set a high z-index and ensure visibility
+          kbProjectList.style.zIndex = "10002";
+
+          filtered.forEach(proj => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = proj;
+
+            // Style matching your existing dropdowns
+            item.style.padding = "10px";
+            item.style.cursor = "pointer";
+
+            item.onclick = () => {
+              kbProjectInput.value = proj;
+              kbProjectList.style.display = 'none';
+              autoResize(kbProjectInput);
+
+              // Proceed to fetch categories
+              kbFetchCategories(proj);
+            };
+            kbProjectList.appendChild(item);
+          });
+        } else {
+          kbProjectList.style.display = 'none';
         }
-      });
+      }
+    });
   }
 
   // 3. Category Fetching
   async function kbFetchCategories(projectName) {
-      if (!kbCategoryInput) return;
-      kbCategoryInput.disabled = false;
-      kbCategoryInput.value = "";
-      kbCategoryInput.placeholder = "Loading categories...";
-      try {
-          const res = await fetch(`${API_URL}/categories`, {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({ project: projectName })
-          });
-          kbCategories = await res.json();
-          kbCategoryInput.placeholder = "Type or Select Category...";
-      } catch (err) { console.error("KB Category Fetch Error:", err); }
+    if (!kbCategoryInput) return;
+    kbCategoryInput.disabled = false;
+    kbCategoryInput.value = "";
+    kbCategoryInput.placeholder = "Loading categories...";
+    try {
+      const res = await fetch(`${API_URL}/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: projectName })
+      });
+      kbCategories = await res.json();
+      kbCategoryInput.placeholder = "Type or Select Category...";
+    } catch (err) { console.error("KB Category Fetch Error:", err); }
   }
 
   // 4. Category Search Logic
   if (kbCategoryInput) {
     // 1. Trigger the dropdown immediately when clicking/focusing
-    kbCategoryInput.addEventListener('focus', function() {
-        if (kbCategories.length > 0) {
-            this.dispatchEvent(new Event('input'));
-        }
+    kbCategoryInput.addEventListener('focus', function () {
+      if (kbCategories.length > 0) {
+        this.dispatchEvent(new Event('input'));
+      }
     });
 
-    kbCategoryInput.addEventListener('input', function() {
-        autoResize(this);
-        const searchText = this.value.toLowerCase();
-        
-        // Show all fetched categories if search is empty, otherwise filter
-        const filtered = searchText === "" 
-            ? kbCategories 
-            : kbCategories.filter(c => c.toLowerCase().includes(searchText));
-        
-        if (kbCategoryList) {
-            kbCategoryList.innerHTML = "";
-            
-            if (filtered.length > 0) {
-                kbCategoryList.style.display = 'block';
-                // Higher z-index to ensure it sits above the attribute container
-                kbCategoryList.style.zIndex = "10005"; 
+    kbCategoryInput.addEventListener('input', function () {
+      autoResize(this);
+      const searchText = this.value.toLowerCase();
 
-                filtered.forEach(cat => {
-                    const item = document.createElement('div');
-                    item.className = 'dropdown-item';
-                    item.textContent = cat;
-                    item.style.padding = "10px";
-                    item.style.cursor = "pointer";
+      // Show all fetched categories if search is empty, otherwise filter
+      const filtered = searchText === ""
+        ? kbCategories
+        : kbCategories.filter(c => c.toLowerCase().includes(searchText));
 
-                    item.onclick = () => {
-                        kbCategoryInput.value = cat;
-                        kbCategoryList.style.display = 'none';
-                        autoResize(kbCategoryInput);
-                        
-                        // Proceed to fetch the attributes for this specific category
-                        kbFetchAttributes(kbProjectInput.value, cat); 
-                    };
-                    kbCategoryList.appendChild(item);
-                });
-            } else {
-                kbCategoryList.style.display = 'none';
-            }
+      if (kbCategoryList) {
+        kbCategoryList.innerHTML = "";
+
+        if (filtered.length > 0) {
+          kbCategoryList.style.display = 'block';
+          // Higher z-index to ensure it sits above the attribute container
+          kbCategoryList.style.zIndex = "10005";
+
+          filtered.forEach(cat => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = cat;
+            item.style.padding = "10px";
+            item.style.cursor = "pointer";
+
+            item.onclick = () => {
+              kbCategoryInput.value = cat;
+              kbCategoryList.style.display = 'none';
+              autoResize(kbCategoryInput);
+
+              // Proceed to fetch the attributes for this specific category
+              kbFetchAttributes(kbProjectInput.value, cat);
+            };
+            kbCategoryList.appendChild(item);
+          });
+        } else {
+          kbCategoryList.style.display = 'none';
         }
+      }
     });
   }
 
@@ -1403,20 +1416,20 @@ document.addEventListener("DOMContentLoaded", function () {
   async function kbFetchAttributes(proj, cat) {
     if (!kbAttributesContainer) return;
     kbAttributesContainer.innerHTML = '<p style="text-align:center; padding: 20px;">Fetching Attributes...</p>';
-    
+
     try {
-        const res = await fetch(`${API_URL}/kb/attribute_info`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ project: proj, category: cat })
-        });
-        const attributes = await res.json();
-        
-        if (attributes.length === 0) {
-            kbAttributesContainer.innerHTML = '<p style="text-align:center; margin-top:50px; color:#999;">No attributes found.</p>';
-        } else {
-            // We use data-attributes instead of onclick to avoid CSP errors
-            kbAttributesContainer.innerHTML = attributes.map((attr) => `
+      const res = await fetch(`${API_URL}/kb/attribute_info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: proj, category: cat })
+      });
+      const attributes = await res.json();
+
+      if (attributes.length === 0) {
+        kbAttributesContainer.innerHTML = '<p style="text-align:center; margin-top:50px; color:#999;">No attributes found.</p>';
+      } else {
+        // We use data-attributes instead of onclick to avoid CSP errors
+        kbAttributesContainer.innerHTML = attributes.map((attr) => `
               <div class="kb-attribute-row" style="display:flex; justify-content:space-between; align-items:center; padding: 12px 15px; border-bottom: 1px solid #f0f0f0; width: 100%; box-sizing: border-box;">
                   <span style="font-size:12px; color:#333; font-weight: 500; word-break: break-word; padding-right: 10px; line-height: 1.2;">
                       ${attr.attribute_name}
@@ -1432,66 +1445,66 @@ document.addEventListener("DOMContentLoaded", function () {
                   </i>
               </div>
             `).join('');
-          }
-        renderKbActionButtons(proj, cat);
+      }
+      renderKbActionButtons(proj, cat);
     } catch (err) {
-        kbAttributesContainer.innerHTML = '<p style="text-align:center; color: red;">Error loading data</p>';
+      kbAttributesContainer.innerHTML = '<p style="text-align:center; color: red;">Error loading data</p>';
     }
   }
 
   if (kbAttributesContainer) {
     // Changed to async to allow fetching the PDF URL
     kbAttributesContainer.addEventListener('click', async (e) => {
-        const icon = e.target.closest('.kb-info-icon');
-        if (icon) {
-            const attrName = decodeURIComponent(icon.dataset.name);     
-            
-            // Log the action with specific attribute details
-            logUserAction("KB Log", {
-                project_name: kbProjectInput.value,
-                category: kbCategoryInput.value,
-                attribute_name: attrName
+      const icon = e.target.closest('.kb-info-icon');
+      if (icon) {
+        const attrName = decodeURIComponent(icon.dataset.name);
+
+        // Log the action with specific attribute details
+        logUserAction("KB Log", {
+          project_name: kbProjectInput.value,
+          category: kbCategoryInput.value,
+          attribute_name: attrName
+        });
+
+        const modal = document.getElementById('attrInfoModal');
+        const content = document.getElementById('infoContent');
+        const nameEl = document.getElementById('infoAttrName');
+
+        if (modal && content && nameEl) {
+          nameEl.innerText = attrName;
+
+          // --- NEW UPDATE: Check for existing Knowledge Base PDF ---
+          let kbButtonHtml = '';
+          try {
+            const res = await fetch(`${API_URL}/kb/get_pdf`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                project: kbProjectInput.value.trim(),
+                category: kbCategoryInput.value.trim()
+              })
             });
+            const data = await res.json();
 
-            const modal = document.getElementById('attrInfoModal');
-            const content = document.getElementById('infoContent');
-            const nameEl = document.getElementById('infoAttrName');
-
-            if (modal && content && nameEl) {
-                nameEl.innerText = attrName;
-
-                // --- NEW UPDATE: Check for existing Knowledge Base PDF ---
-                let kbButtonHtml = '';
-                try {
-                    const res = await fetch(`${API_URL}/kb/get_pdf`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ 
-                            project: kbProjectInput.value.trim(), 
-                            category: kbCategoryInput.value.trim() 
-                        })
-                    });
-                    const data = await res.json();
-
-                    // Only prepare the button if a valid PDF URL exists
-                    if (data.url) {
-                        kbButtonHtml = `
+            // Only prepare the button if a valid PDF URL exists
+            if (data.url) {
+              kbButtonHtml = `
                             <div style="margin-top: 15px; padding-top: 12px; border-top: 2px solid #f0f0f0;">
                                 <button id="modalViewKbBtn" class="submit-btn" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                                     <i class="fas fa-file-pdf"></i> View Full KB
                                 </button>
                             </div>
                         `;
-                        
-                        // Store the URL globally or in the button context to use after innerHTML injection
-                        window.currentModalKbUrl = data.url;
-                    }
-                } catch (err) {
-                    console.error("Error fetching KB for modal:", err);
-                }
 
-                // Updated innerHTML including the conditional View KB button
-                content.innerHTML = `
+              // Store the URL globally or in the button context to use after innerHTML injection
+              window.currentModalKbUrl = data.url;
+            }
+          } catch (err) {
+            console.error("Error fetching KB for modal:", err);
+          }
+
+          // Updated innerHTML including the conditional View KB button
+          content.innerHTML = `
                     <div style="margin-bottom:12px; border-bottom: 1px solid #f0f0f0; padding-bottom:8px;">
                         <strong style="color:#764ba2;">Definition:</strong><br>
                         ${decodeURIComponent(icon.dataset.def)}
@@ -1515,139 +1528,139 @@ document.addEventListener("DOMContentLoaded", function () {
                     ${kbButtonHtml}
                 `;
 
-                // Attach click event to the newly created button if it exists
-                const modalViewBtn = document.getElementById('modalViewKbBtn');
-                if (modalViewBtn && window.currentModalKbUrl) {
-                    modalViewBtn.onclick = () => {
-                        logUserAction("KB Log", {
-                            project_name: kbProjectInput.value,
-                            category: kbCategoryInput.value,
-                            kb_id: "PDF View from Modal"
-                        });
-                        window.open(window.currentModalKbUrl, '_blank');
-                    };
-                }
+          // Attach click event to the newly created button if it exists
+          const modalViewBtn = document.getElementById('modalViewKbBtn');
+          if (modalViewBtn && window.currentModalKbUrl) {
+            modalViewBtn.onclick = () => {
+              logUserAction("KB Log", {
+                project_name: kbProjectInput.value,
+                category: kbCategoryInput.value,
+                kb_id: "PDF View from Modal"
+              });
+              window.open(window.currentModalKbUrl, '_blank');
+            };
+          }
 
-                modal.style.display = 'block';
-            }
+          modal.style.display = 'block';
         }
+      }
     });
   }
 
   // 6. Action Buttons
   async function renderKbActionButtons(proj, cat) {
-      if (!kbActionButtons) return;
-      kbActionButtons.innerHTML = '';
-      
-      try {
-          // Check if PDF exists before rendering the button
-          const res = await fetch(`${API_URL}/kb/get_pdf`, {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({ 
-                  project: proj.trim(), 
-                  category: cat.trim() 
-              })
+    if (!kbActionButtons) return;
+    kbActionButtons.innerHTML = '';
+
+    try {
+      // Check if PDF exists before rendering the button
+      const res = await fetch(`${API_URL}/kb/get_pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project: proj.trim(),
+          category: cat.trim()
+        })
+      });
+      const data = await res.json();
+
+      // ONLY render the View KB button if a URL actually exists in the DB
+      if (data.url) {
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'submit-btn';
+        viewBtn.innerHTML = '<i class="fas fa-file-pdf"></i> View KB';
+        viewBtn.onclick = () => {
+          // ADD THIS LOG: Captures when the PDF is opened
+          logUserAction("KB Log", {
+            project_name: proj,
+            category: cat,
+            kb_id: "PDF View"
+          });
+          window.open(data.url, '_blank');
+        };
+        kbActionButtons.appendChild(viewBtn);
+      }
+    } catch (err) {
+      console.error("Error checking KB existence:", err);
+    }
+
+    // SME Logic (Always show Upload/AI buttons for SMEs so they can add missing data)
+    if (currentUserRole === 'SME') {
+      const upBtn = document.createElement('button');
+      upBtn.className = 'submit-btn';
+      upBtn.style.background = 'linear-gradient(135deg, #2ed573 0%, #26af61 100%)';
+      upBtn.innerHTML = '<i class="fas fa-upload"></i> Upload KB';
+      upBtn.onclick = () => {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'application/pdf';
+        fileInput.onchange = async () => {
+          if (!fileInput.files[0]) return;
+          const fd = new FormData();
+          fd.append('file', fileInput.files[0]);
+          fd.append('project', proj);
+          fd.append('category', cat);
+          fd.append('userEmail', currentUserEmail);
+          upBtn.innerText = "Uploading...";
+
+          try {
+            await fetch(`${API_URL}/kb/upload_pdf`, { method: 'POST', body: fd });
+            alert("Knowledge Base Updated!");
+            // Refresh buttons to show the "View KB" button now that it exists
+            renderKbActionButtons(proj, cat);
+          } catch (err) {
+            alert("Upload failed.");
+          } finally {
+            upBtn.innerHTML = '<i class="fas fa-upload"></i> Upload KB';
+          }
+        };
+        fileInput.click();
+      };
+      kbActionButtons.appendChild(upBtn);
+
+      const aiBtn = document.createElement('button');
+      aiBtn.className = 'submit-btn';
+      aiBtn.style.background = 'linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%)';
+      aiBtn.innerHTML = '<i class="fas fa-robot"></i> Explore KB on AI';
+
+      aiBtn.onclick = async () => {
+        logUserAction("KB Log", {
+          project_name: proj,
+          category: cat,
+          kb_id: "AI Exploration"
+        });
+
+        const originalContent = aiBtn.innerHTML;
+        aiBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+
+        try {
+          const res = await fetch(`${API_URL}/kb/ai_generate_guide`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project: proj, category: cat })
           });
           const data = await res.json();
 
-          // ONLY render the View KB button if a URL actually exists in the DB
-          if (data.url) {
-              const viewBtn = document.createElement('button');
-              viewBtn.className = 'submit-btn';
-              viewBtn.innerHTML = '<i class="fas fa-file-pdf"></i> View KB';
-              viewBtn.onclick = () => {
-                // ADD THIS LOG: Captures when the PDF is opened
-                logUserAction("KB Log", {
-                    project_name: proj,
-                    category: cat,
-                    kb_id: "PDF View"
-                });
-                window.open(data.url, '_blank');
-              };
-              kbActionButtons.appendChild(viewBtn);
+          if (data.error) {
+            alert("Error: " + data.error);
+            return;
           }
-      } catch (err) {
-          console.error("Error checking KB existence:", err);
-      }
 
-      // SME Logic (Always show Upload/AI buttons for SMEs so they can add missing data)
-      if (currentUserRole === 'SME') {
-          const upBtn = document.createElement('button');
-          upBtn.className = 'submit-btn';
-          upBtn.style.background = 'linear-gradient(135deg, #2ed573 0%, #26af61 100%)';
-          upBtn.innerHTML = '<i class="fas fa-upload"></i> Upload KB';
-          upBtn.onclick = () => {
-              const fileInput = document.createElement('input');
-              fileInput.type = 'file'; 
-              fileInput.accept = 'application/pdf';
-              fileInput.onchange = async () => {
-                  if(!fileInput.files[0]) return;
-                  const fd = new FormData();
-                  fd.append('file', fileInput.files[0]); 
-                  fd.append('project', proj);
-                  fd.append('category', cat); 
-                  fd.append('userEmail', currentUserEmail);
-                  upBtn.innerText = "Uploading...";
-                  
-                  try {
-                      await fetch(`${API_URL}/kb/upload_pdf`, { method: 'POST', body: fd });
-                      alert("Knowledge Base Updated!");
-                      // Refresh buttons to show the "View KB" button now that it exists
-                      renderKbActionButtons(proj, cat);
-                  } catch (err) {
-                      alert("Upload failed.");
-                  } finally {
-                      upBtn.innerHTML = '<i class="fas fa-upload"></i> Upload KB';
-                  }
-              };
-              fileInput.click();
-          };
-          kbActionButtons.appendChild(upBtn);
+          // --- FIX START: UI LAYERING ---
 
-          const aiBtn = document.createElement('button');
-          aiBtn.className = 'submit-btn';
-          aiBtn.style.background = 'linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%)';
-          aiBtn.innerHTML = '<i class="fas fa-robot"></i> Explore KB on AI';
-          
-          aiBtn.onclick = async () => {
-              logUserAction("KB Log", {
-                project_name: proj,
-                category: cat,
-                kb_id: "AI Exploration"
-              });
+          // 1. Bring the results overlay to the absolute front
+          resultsOverlay.style.zIndex = "20000";
+          resultsOverlay.style.display = "flex";
 
-              const originalContent = aiBtn.innerHTML;
-              aiBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+          resultsContainer.innerHTML = "";
+          resultsTitle.innerHTML = `<i class="fas fa-robot"></i> AI Master Technical Guide`;
 
-              try {
-                  const res = await fetch(`${API_URL}/kb/ai_generate_guide`, {
-                      method: 'POST',
-                      headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify({ project: proj, category: cat })
-                  });
-                  const data = await res.json();
+          if (searchContext) {
+            searchContext.innerHTML = `<strong>Category:</strong> ${cat}`;
+          }
 
-                  if (data.error) {
-                      alert("Error: " + data.error);
-                      return;
-                  }
-
-                  // --- FIX START: UI LAYERING ---
-                  
-                  // 1. Bring the results overlay to the absolute front
-                  resultsOverlay.style.zIndex = "20000"; 
-                  resultsOverlay.style.display = "flex";
-                  
-                  resultsContainer.innerHTML = "";
-                  resultsTitle.innerHTML = `<i class="fas fa-robot"></i> AI Master Technical Guide`;
-                  
-                  if (searchContext) {
-                      searchContext.innerHTML = `<strong>Category:</strong> ${cat}`;
-                  }
-
-                  // Inject AI Content (The AI now generates the full table)
-                  resultsContainer.innerHTML = `
+          // Inject AI Content (The AI now generates the full table)
+          resultsContainer.innerHTML = `
                     <div id="tech-guide-content" style="padding: 15px; font-size: 13px; line-height: 1.6; color: #333; background: white; text-align: left; width: 100%; box-sizing: border-box;">
                         <div style="border-bottom: 2px solid #6c5ce7; margin-bottom: 15px; padding-bottom: 10px;">
                             <h2 style="color: #6c5ce7; margin: 0; font-size: 18px;">Engineering SOP: ${cat}</h2>
@@ -1669,10 +1682,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     </div>
                   `;
 
-                  // 3. Word Download Logic (Remains the same, packages the full AI HTML)
-                  document.getElementById('downloadAiGuide').onclick = () => {
-                      const content = document.getElementById('tech-guide-content').innerHTML;
-                      const blob = new Blob(['\ufeff', `
+          // 3. Word Download Logic (Remains the same, packages the full AI HTML)
+          document.getElementById('downloadAiGuide').onclick = () => {
+            const content = document.getElementById('tech-guide-content').innerHTML;
+            const blob = new Blob(['\ufeff', `
                         <html><head><meta charset='utf-8'><style>
                             body { font-family: Arial, sans-serif; }
                             table { border-collapse: collapse; width: 100%; }
@@ -1682,69 +1695,69 @@ document.addEventListener("DOMContentLoaded", function () {
                         <body>${content}</body></html>
                       `], { type: 'application/msword' });
 
-                      const url = URL.createObjectURL(blob);
-                      const link = document.createElement('a');
-                      link.href = url;
-                      link.download = `${cat.replace(/[^a-z0-9]/gi, '_')}_Master_Guide.doc`;
-                      link.click();
-                  };
-
-                  // --- FIX END ---
-
-              } catch (err) {
-                  console.error("AI Generation Error:", err);
-                  alert("Failed to connect to AI server.");
-              } finally {
-                  aiBtn.innerHTML = originalContent;
-              }
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${cat.replace(/[^a-z0-9]/gi, '_')}_Master_Guide.doc`;
+            link.click();
           };
-          
-          kbActionButtons.appendChild(aiBtn);
-      }
+
+          // --- FIX END ---
+
+        } catch (err) {
+          console.error("AI Generation Error:", err);
+          alert("Failed to connect to AI server.");
+        } finally {
+          aiBtn.innerHTML = originalContent;
+        }
+      };
+
+      kbActionButtons.appendChild(aiBtn);
+    }
   }
 
   // Modal Detail Handler
   window.showAttributeInfo = (name, def, sample, allowed, type) => {
-      const modal = document.getElementById('attrInfoModal');
-      const content = document.getElementById('infoContent');
-      const nameEl = document.getElementById('infoAttrName');
-      if (modal && content && nameEl) {
-          nameEl.innerText = name;
-          content.innerHTML = `
+    const modal = document.getElementById('attrInfoModal');
+    const content = document.getElementById('infoContent');
+    const nameEl = document.getElementById('infoAttrName');
+    if (modal && content && nameEl) {
+      nameEl.innerText = name;
+      content.innerHTML = `
               <div style="margin-bottom:10px;"><strong>Definition:</strong><br>${def}</div>
               <div style="margin-bottom:10px;"><strong>Sample LOV:</strong><br>${sample}</div>
               <div style="margin-bottom:10px;"><strong>Allowed LOV:</strong><br>${allowed}</div>
               <div><strong>Data Type:</strong><br>${type}</div>
           `;
-          modal.style.display = 'block';
-      }
+      modal.style.display = 'block';
+    }
   };
 
   const closeAttrInfoBtn = document.getElementById('closeAttrInfoModal');
   if (closeAttrInfoBtn) {
-      closeAttrInfoBtn.addEventListener('click', () => {
-          const modal = document.getElementById('attrInfoModal');
-          if (modal) {
-              modal.style.display = 'none';
-          }
-      });
+    closeAttrInfoBtn.addEventListener('click', () => {
+      const modal = document.getElementById('attrInfoModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    });
   }
 
   // Optional: Close modal if user clicks outside of it
   window.addEventListener('click', (event) => {
-      const modal = document.getElementById('attrInfoModal');
-      if (event.target === modal) {
-          modal.style.display = "none";
-      }
+    const modal = document.getElementById('attrInfoModal');
+    if (event.target === modal) {
+      modal.style.display = "none";
+    }
   });
 
   // Global click listener to close KB dropdowns
   document.addEventListener('click', (e) => {
     if (kbProjectInput && !kbProjectInput.contains(e.target) && !kbProjectList.contains(e.target)) {
-        if (kbProjectList) kbProjectList.style.display = 'none';
+      if (kbProjectList) kbProjectList.style.display = 'none';
     }
     if (kbCategoryInput && !kbCategoryInput.contains(e.target) && !kbCategoryList.contains(e.target)) {
-        if (kbCategoryList) kbCategoryList.style.display = 'none';
+      if (kbCategoryList) kbCategoryList.style.display = 'none';
     }
   });
 
@@ -1764,18 +1777,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Final safety check (should already be handled by the listeners above)
     if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-        return; // Silent return because the user was already alerted by the 'change' listener
+      return; // Silent return because the user was already alerted by the 'change' listener
     }
 
     if (logType !== "usage") {
-        if (!project || project === "" || project.toLowerCase().includes("select")) {
-            alert("❌ Error: Please select a Project name first!");
-            return;
-        }
+      if (!project || project === "" || project.toLowerCase().includes("select")) {
+        alert("❌ Error: Please select a Project name first!");
+        return;
+      }
     }
 
     let url = `${API_URL}/export_logs?project=${encodeURIComponent(project)}&batch=${encodeURIComponent(batch)}&type=${logType}`;
-    
+
     if (startDate) url += `&start_date=${startDate}`;
     if (endDate) url += `&end_date=${endDate}`;
 
@@ -1792,11 +1805,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // 1. Click Excel Icon -> Show Query, Decision, and Usage icons
     if (mainBtn) {
-        mainBtn.addEventListener("click", (e) => {
-            e.preventDefault();
-            mainBtn.style.display = "none";
-            optionsContainer.style.display = "flex";
-        });
+      mainBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        mainBtn.style.display = "none";
+        optionsContainer.style.display = "flex";
+      });
     }
 
     // 2. Query Log & Decision Log (Direct Download)
@@ -1805,20 +1818,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // 3. Click Purple User Icon -> ONLY show the Date inputs and Tick button
     if (usageBtn) {
-        usageBtn.onclick = (e) => {
-            e.preventDefault();
-            // Toggle visibility of the date container
-            usageDateContainer.style.display = (usageDateContainer.style.display === "none") ? "block" : "none";
-        };
+      usageBtn.onclick = (e) => {
+        e.preventDefault();
+        // Toggle visibility of the date container
+        usageDateContainer.style.display = (usageDateContainer.style.display === "none") ? "block" : "none";
+      };
     }
 
     // 4. Click Green Tick Button -> Execute the actual download with dates
     if (confirmUsageBtn) {
-        confirmUsageBtn.onclick = () => {
-            triggerLogDownload("usage");
-            // Optional: Hide dates again after clicking tick
-            usageDateContainer.style.display = "none";
-        };
+      confirmUsageBtn.onclick = () => {
+        triggerLogDownload("usage");
+        // Optional: Hide dates again after clicking tick
+        usageDateContainer.style.display = "none";
+      };
     }
   }
 
@@ -1859,18 +1872,20 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   function performValidation(type) {
+    currentView = "search";
 
     let actionLabel = "Checked Query";
     if (type === "decision") actionLabel = "Checked Decision"; // Optional: Map to your sheet name
     if (type === "feedback") actionLabel = "Checked Feedback";
 
     logUserAction("Checked Query", {
-        query_id: `Validation: ${type}`
+      query_id: `Validation: ${type}`
     });
 
     resultsContainer.innerHTML =
       '<p style="text-align:center;">Searching Database...</p>';
     resultsOverlay.style.display = "flex";
+    resultsTitle.innerText = "Search Results";
 
     if (searchContext) {
       // REMOVED the dynamicBatchLine from this block
@@ -1912,7 +1927,7 @@ document.addEventListener("DOMContentLoaded", function () {
         ].filter((b) => b && b !== "nan" && b !== "");
 
         logUserAction("Checked Query", {
-            query_id: type === "query" ? "Validation Search" : "Decision Search"
+          query_id: type === "query" ? "Validation Search" : "Decision Search"
         });
 
         // 2. Update the search context UI
@@ -1936,8 +1951,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // ======================================================
   // 11. RENDER RESULTS (CORE UI LOGIC)
   // ======================================================
-  function renderResults(data, type) {
-    resultsContainer.innerHTML = "";
+  function renderResults(data, type, append = false) {
+    if (!append) resultsContainer.innerHTML = "";
     let queries = Array.isArray(data) ? data : data.queries || [];
     let decisions = Array.isArray(data) ? [] : data.decisions || [];
     let feedbacks = Array.isArray(data) ? [] : data.feedbacks || [];
@@ -2066,7 +2081,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       if (item.is_decision_log && item.is_user_view) {
-        let statusColor = "#f39c12"; 
+        let statusColor = "#f39c12";
         let statusBg = "#fffdf0";
         let statusLabel = (item.status || "PROPOSED").toUpperCase();
         if (item.status === "Active" || item.status === "active") { statusColor = "#2ecc71"; statusBg = "#eafaf1"; statusLabel = "OFFICIAL"; }
@@ -2109,9 +2124,9 @@ document.addEventListener("DOMContentLoaded", function () {
         card.style.borderLeft = "4px solid #e74c3c";
         let badgeColor = "#c62828";
         let badgeText = item.current_stage || "PENDING";
-        if (item.current_stage === "FORWARDED BY SME" || item.current_stage === "Client_PL") { 
-            badgeColor = "#8e44ad"; 
-            badgeText = "FORWARDED BY SME"; 
+        if (item.current_stage === "FORWARDED BY SME" || item.current_stage === "Client_PL") {
+          badgeColor = "#8e44ad";
+          badgeText = "FORWARDED BY SME";
         }
         const roles = ["TL", "PL", "PM", "SME"];
         let options = roles.filter((r) => r !== currentUserRole);
@@ -2206,16 +2221,16 @@ document.addEventListener("DOMContentLoaded", function () {
         // --- NEW REQUIREMENT: INTERNAL SMALL DECISION BOX ---
         let decisionRefBox = "";
         if (decisions.length > 0) {
-            const activeDecIds = decisions
-                .filter(d => d.status && d.status.toLowerCase() === 'active' && d.custom_decision_id && d.custom_decision_id !== 'nan' && d.custom_decision_id !== 'null')
-                .map(d => d.custom_decision_id);
-            if (activeDecIds.length > 0) {
-                decisionRefBox = `
+          const activeDecIds = decisions
+            .filter(d => d.status && d.status.toLowerCase() === 'active' && d.custom_decision_id && d.custom_decision_id !== 'nan' && d.custom_decision_id !== 'null')
+            .map(d => d.custom_decision_id);
+          if (activeDecIds.length > 0) {
+            decisionRefBox = `
                     <div style="margin-top:10px; background:#fff3cd; border:1px solid #ffeeba; color:#856404; padding:8px; border-radius:6px; font-size:10px; border-left:3px solid #ffc107; line-height:1.4; text-align: center;">
                         <i class="fas fa-exclamation-circle"></i> For this project, category and attribute, a decision exists too. Check for reference. 
                         <br><strong style="font-size: 11px; color: #d35400;">Decision ID: ${activeDecIds.join(", ")}</strong>
                     </div>`;
-            }
+          }
         }
 
         let answerHTML = "";
@@ -2331,14 +2346,14 @@ document.addEventListener("DOMContentLoaded", function () {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userEmail: currentUserEmail })
         })
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === "success") {
-            fetchUserHistory(); // Refresh history to show strikethrough
-          } else {
-            alert("Error: " + data.message);
-          }
-        });
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === "success") {
+              refreshCurrentView(); // Refresh the current view
+            } else {
+              alert("Error: " + data.message);
+            }
+          });
       });
     });
 
@@ -2353,17 +2368,17 @@ document.addEventListener("DOMContentLoaded", function () {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userEmail: currentUserEmail, correctedResponse: correctedText })
         })
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === "success") {
-            fetchUserHistory(); // Refresh to show corrected response
-          } else {
-            alert("Error: " + data.message);
-          }
-        });
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === "success") {
+              refreshCurrentView(); // Refresh the current view
+            } else {
+              alert("Error: " + data.message);
+            }
+          });
       });
     });
-}
+  }
 
 
   // --- CREATE DECISION FORM ---
@@ -2422,7 +2437,7 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("saveDecisionBtn").addEventListener("click", () => {
       const payload = {
         // Use fallbacks to ensure null is never sent to the server
-        userEmail: currentUserEmail || "Unknown User", 
+        userEmail: currentUserEmail || "Unknown User",
         project: projectInput.value || "General",
         category: categoryInput.value || "N/A",
         attribute: document.getElementById("newDecisionAttr").value,
@@ -2448,7 +2463,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
           logUserAction("Posted Query", {
             query_id: "New Decision Proposal",
-            category: categoryInput.value, 
+            category: categoryInput.value,
             attribute_name: document.getElementById("newDecisionAttr").value
           });
           performValidation("decision");
@@ -2479,7 +2494,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function submitResponse(id) {
     const btn = document.querySelector(`.send-response-btn[data-id="${id}"]`);
-    
+
     const formData = new FormData();
     formData.append("queryId", id);
     formData.append("response", document.getElementById(`reply-${id}`).value);
@@ -2489,21 +2504,21 @@ document.addEventListener("DOMContentLoaded", function () {
     if (fileInput.files.length > 0) formData.append("file", fileInput.files[0]);
 
     fetch(`${API_URL}/respond`, { method: "POST", body: formData }).then(() => {
-        alert("Sent!");
+      alert("Sent!");
 
-        logUserAction("Admin Responded", {
-            project_name: btn.dataset.proj,
-            batch_name: btn.dataset.batch,
-            category: btn.dataset.cat,
-            attribute_name: btn.dataset.attr,
-            query_id: btn.dataset.customid, // This will now correctly be "ABC_022026003"
-            query_sent_to: currentUserEmail,
-            duration: new Date().toLocaleString(),
-            turnaround_time: btn.dataset.asker,
-            kb_id: document.getElementById(`reply-${id}`).value
-        });
+      logUserAction("Admin Responded", {
+        project_name: btn.dataset.proj,
+        batch_name: btn.dataset.batch,
+        category: btn.dataset.cat,
+        attribute_name: btn.dataset.attr,
+        query_id: btn.dataset.customid, // This will now correctly be "ABC_022026003"
+        query_sent_to: currentUserEmail,
+        duration: new Date().toLocaleString(),
+        turnaround_time: btn.dataset.asker,
+        kb_id: document.getElementById(`reply-${id}`).value
+      });
 
-        fetchPendingQueries();
+      fetchPendingQueries();
     });
   }
 
@@ -2524,7 +2539,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // ADD THIS LOG: Records that a query was assigned to a different role
         logUserAction("Checked Query", {
-            query_id: `Escalated ${id} to ${role}`
+          query_id: `Escalated ${id} to ${role}`
         });
 
         fetchPendingQueries();
@@ -2549,31 +2564,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function logUserAction(action, metadata = {}) {
     if (!currentUserEmail) return;
-    
+
     // Logic: Use metadata if provided (for KB), otherwise fallback to main screen inputs
     const payload = {
-        user_email: currentUserEmail,
-        user_role: currentUserRole || (currentUserIsAdmin ? "Admin" : "User"),
-        action_type: action,
-        project_name: metadata.project_name || projectInput.value || "",
-        batch_name: metadata.batch_name || batchInput.value || "",
-        category: metadata.category || categoryInput.value || "",
-        attribute_name: metadata.attribute_name || selectedAttributes.join(" | ") || "",
-        query_id: metadata.query_id || "",
-        query_sent_to: metadata.query_sent_to || "",
-        kb_id: metadata.kb_id || "",
-        duration: metadata.duration || "",
-        turnaround_time: metadata.turnaround_time || ""
+      user_email: currentUserEmail,
+      user_role: currentUserRole || (currentUserIsAdmin ? "Admin" : "User"),
+      action_type: action,
+      project_name: metadata.project_name || projectInput.value || "",
+      batch_name: metadata.batch_name || batchInput.value || "",
+      category: metadata.category || categoryInput.value || "",
+      attribute_name: metadata.attribute_name || selectedAttributes.join(" | ") || "",
+      query_id: metadata.query_id || "",
+      query_sent_to: metadata.query_sent_to || "",
+      kb_id: metadata.kb_id || "",
+      duration: metadata.duration || "",
+      turnaround_time: metadata.turnaround_time || ""
     };
 
     try {
-        fetch(`${API_URL}/log_activity`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+      fetch(`${API_URL}/log_activity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
     } catch (err) {
-        console.error("Activity logging failed:", err);
+      console.error("Activity logging failed:", err);
     }
   }
 
@@ -2611,7 +2626,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .then((data) => {
         if (data.status === "success") {
           alert(`Query Posted! ID: ${data.custom_id}`);
-          
+
           logUserAction("Posted Query", {
             project_name: projectInput.value.trim(),
             batch_name: batchInput.value.trim(),
@@ -2639,7 +2654,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
   });
 
-// ======================================================
+  // ======================================================
   // 14. AI POWERED GRAMMAR & TECHNICAL SPELLCHECK
   // ======================================================
 
@@ -2648,70 +2663,70 @@ document.addEventListener("DOMContentLoaded", function () {
   const aiErrorCount = document.getElementById('aiErrorCount');
   const aiBox = document.getElementById('aiSuggestionBox');
   const aiList = document.getElementById('aiSuggestionList');
-  
+
   let aiTimer;
 
   if (queryInput) {
     // Disable native browser spellcheck so it doesn't clash with AI
     queryInput.setAttribute('spellcheck', 'false');
 
-    queryInput.addEventListener('input', function() {
-        clearTimeout(aiTimer);
-        const text = this.value.trim();
+    queryInput.addEventListener('input', function () {
+      clearTimeout(aiTimer);
+      const text = this.value.trim();
 
-        if (text.length < 3) {
-            aiIcon.style.display = 'none';
-            aiBox.style.display = 'none';
-            return;
-        }
+      if (text.length < 3) {
+        aiIcon.style.display = 'none';
+        aiBox.style.display = 'none';
+        return;
+      }
 
-        aiTimer = setTimeout(() => {
-            runAiCheck(text);
-        }, 800); 
+      aiTimer = setTimeout(() => {
+        runAiCheck(text);
+      }, 800);
     });
 
     aiIcon.addEventListener('click', (e) => {
-        e.stopPropagation();
-        aiBox.style.display = aiBox.style.display === 'none' ? 'block' : 'none';
+      e.stopPropagation();
+      aiBox.style.display = aiBox.style.display === 'none' ? 'block' : 'none';
     });
   }
 
   async function runAiCheck(text) {
     try {
-        // Build technical whitelist safely
-        const masterTechVocab = [
-            ...(allProjects || []), 
-            ...(allCategories || []), 
-            ...(allAttributes || [])
-        ].map(v => String(v).toLowerCase());
+      // Build technical whitelist safely
+      const masterTechVocab = [
+        ...(allProjects || []),
+        ...(allCategories || []),
+        ...(allAttributes || [])
+      ].map(v => String(v).toLowerCase());
 
-        const response = await fetch('https://api.languagetool.org/v2/check', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                'text': text,
-                'language': 'en-US'
-            })
-        });
+      const response = await fetch('https://api.languagetool.org/v2/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          'text': text,
+          'language': 'en-US'
+        })
+      });
 
-        if (!response.ok) return;
-        const data = await response.json();
-        
-        // Filter out errors that match our technical database
-        const filteredMatches = data.matches.filter(match => {
-            const errorWord = text.substring(match.offset, match.offset + match.length).toLowerCase();
-            return !masterTechVocab.includes(errorWord);
-        });
+      if (!response.ok) return;
+      const data = await response.json();
 
-        if (filteredMatches.length > 0) {
-            updateAiUI(filteredMatches, text);
-        } else {
-            aiIcon.style.display = 'none';
-            aiBox.style.display = 'none';
-        }
+      // Filter out errors that match our technical database
+      const filteredMatches = data.matches.filter(match => {
+        const errorWord = text.substring(match.offset, match.offset + match.length).toLowerCase();
+        return !masterTechVocab.includes(errorWord);
+      });
+
+      if (filteredMatches.length > 0) {
+        updateAiUI(filteredMatches, text);
+      } else {
+        aiIcon.style.display = 'none';
+        aiBox.style.display = 'none';
+      }
 
     } catch (err) {
-        console.warn("AI Check temporarily unavailable (Check Manifest permissions)");
+      console.warn("AI Check temporarily unavailable (Check Manifest permissions)");
     }
   }
 
@@ -2721,26 +2736,26 @@ document.addEventListener("DOMContentLoaded", function () {
     aiList.innerHTML = '';
 
     matches.forEach(match => {
-        const wrongWord = originalText.substring(match.offset, match.offset + match.length);
-        const suggestion = (match.replacements && match.replacements.length > 0) 
-                           ? match.replacements[0].value 
-                           : "Check spelling";
+      const wrongWord = originalText.substring(match.offset, match.offset + match.length);
+      const suggestion = (match.replacements && match.replacements.length > 0)
+        ? match.replacements[0].value
+        : "Check spelling";
 
-        const item = document.createElement('div');
-        item.style.cssText = "padding: 8px; border-bottom: 1px solid #f0f0f0; cursor: pointer; font-size: 12px; transition: background 0.2s;";
-        item.innerHTML = `<span style="text-decoration: line-through; color: #ff4757;">${wrongWord}</span> <i class="fas fa-arrow-right" style="font-size:10px; margin: 0 5px;"></i> <span style="color: #2ed573; font-weight: bold;">${suggestion}</span>`;
-        
-        item.onmouseover = () => item.style.backgroundColor = "#f8f9fa";
-        item.onmouseout = () => item.style.backgroundColor = "transparent";
+      const item = document.createElement('div');
+      item.style.cssText = "padding: 8px; border-bottom: 1px solid #f0f0f0; cursor: pointer; font-size: 12px; transition: background 0.2s;";
+      item.innerHTML = `<span style="text-decoration: line-through; color: #ff4757;">${wrongWord}</span> <i class="fas fa-arrow-right" style="font-size:10px; margin: 0 5px;"></i> <span style="color: #2ed573; font-weight: bold;">${suggestion}</span>`;
 
-        item.onclick = (e) => {
-            e.stopPropagation();
-            const newText = originalText.substring(0, match.offset) + suggestion + originalText.substring(match.offset + match.length);
-            queryInput.value = newText;
-            aiBox.style.display = 'none';
-            runAiCheck(newText); 
-        };
-        aiList.appendChild(item);
+      item.onmouseover = () => item.style.backgroundColor = "#f8f9fa";
+      item.onmouseout = () => item.style.backgroundColor = "transparent";
+
+      item.onclick = (e) => {
+        e.stopPropagation();
+        const newText = originalText.substring(0, match.offset) + suggestion + originalText.substring(match.offset + match.length);
+        queryInput.value = newText;
+        aiBox.style.display = 'none';
+        runAiCheck(newText);
+      };
+      aiList.appendChild(item);
     });
   }
 

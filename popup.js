@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let selectedAttributes = [];
 
 
+
   const today = new Date().toISOString().split('T')[0];
 
   // Disable future dates for History Search
@@ -2139,6 +2140,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 <span style="display:flex; align-items:center; gap:4px;"><i class="fas fa-folder"></i> <strong>Project:</strong> ${item.project}</span>
                 <span style="color: #ccc;">|</span>
                 <span style="display:flex; align-items:center; gap:4px; overflow:hidden; text-overflow:ellipsis;"><i class="fas fa-sitemap"></i> <strong>Category:</strong> ${item.category}</span>
+                <span style="color: #ccc;">|</span>
+                <span style="display:flex; align-items:center; gap:4px; color: #e67e22;"><i class="fas fa-user"></i> <strong>Asker:</strong> ${item.asker_email || 'N/A'}</span>
             </div>
             <div style="display:flex; justify-content:space-between; align-items: flex-start; margin-bottom:8px; padding-bottom:5px;">
                 <div><span style="background-color:${badgeColor}20; color:${badgeColor}; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700;">${badgeText}</span></div>

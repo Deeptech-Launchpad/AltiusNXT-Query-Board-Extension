@@ -915,13 +915,13 @@ def validate_query():
 
         if request_type in ['query', 'all']:
             sql = """
-                SELECT 
-                    query_text as query, response_text as response, reference_url as url, 
-                    status, id, category, attribute_name as attribute,
+                SELECT
+                    query_text as query, response_text as response, reference_url as url,
+                    status, id, custom_query_id, category, attribute_name as attribute,
                     sku_id, mfr_part_number, manufacturer, batch_name, answered_by,
                     COALESCE(is_response_deprecated, FALSE) as is_response_deprecated,
                     corrected_response
-                FROM query_logs 
+                FROM query_logs
             """
             cur.execute(f"{sql} {filter_clause} LIMIT 20", tuple(args))
             response_payload["queries"] = [dict(row, is_user_view=True) for row in cur.fetchall()]

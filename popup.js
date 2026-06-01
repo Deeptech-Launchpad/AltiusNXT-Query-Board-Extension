@@ -82,27 +82,102 @@ document.addEventListener("DOMContentLoaded", function () {
 
     chrome.action.setBadgeText({ text: "" });
 
-    chrome.identity.getProfileUserInfo(
-      { accountStatus: "ANY" },
-      function (info) {
-        // Only proceed if a valid email is found
-        if (info && info.email && info.email.trim() !== "") {
-          currentUserEmail = info.email.toLowerCase();
-          console.log("[DEBUG] Detected Email:", currentUserEmail);
-          checkRolesAndInitButtons(currentUserEmail);
-          logUserAction("Just Opened");
-        } else {
-          // Block access for Guest users
-          currentUserEmail = "";
-          document.body.innerHTML = `
-                    <div style="padding: 20px; text-align: center; font-family: sans-serif;">
-                        <i class="fas fa-exclamation-circle" style="font-size: 40px; color: #e74c3c; margin-bottom: 15px;"></i>
-                        <h2 style="font-size: 16px;">Access Denied</h2>
-                        <p style="font-size: 13px; color: #666;">Please sign in to Chrome with your official email to use the Query Board.</p>
-                    </div>`;
+    getUserEmail()
+      .then(function (email) {
+        currentUserEmail = email;
+        console.log("[DEBUG] Detected Email:", currentUserEmail);
+        // Cache for background.js so the alarm-driven notification poll
+        // can run without re-prompting OAuth in Firefox.
+        try { chrome.storage.local.set({ cachedUserEmail: email }); } catch (e) {}
+        checkRolesAndInitButtons(currentUserEmail);
+        logUserAction("Just Opened");
+      })
+      .catch(function (err) {
+        console.warn("[DEBUG] Email detection failed:", err && err.message);
+        currentUserEmail = "";
+        document.body.innerHTML = `
+                  <div style="padding: 20px; text-align: center; font-family: sans-serif;">
+                      <i class="fas fa-exclamation-circle" style="font-size: 40px; color: #e74c3c; margin-bottom: 15px;"></i>
+                      <h2 style="font-size: 16px;">Access Denied</h2>
+                      <p style="font-size: 13px; color: #666;">Please sign in with your official email to use the Query Board.</p>
+                  </div>`;
+      });
+  }
+
+  // ======================================================
+  // CROSS-BROWSER EMAIL DETECTION
+  // ======================================================
+  // Chrome/Edge: uses chrome.identity.getProfileUserInfo (silent, no popup).
+  // Firefox: falls back to OAuth via chrome.identity.launchWebAuthFlow
+  // (shows Google consent screen on first install, silent after that).
+  function getUserEmail() {
+    return new Promise(function (resolve, reject) {
+      var hasGetProfile = chrome.identity &&
+                          typeof chrome.identity.getProfileUserInfo === "function";
+
+      if (hasGetProfile) {
+        try {
+          chrome.identity.getProfileUserInfo(
+            { accountStatus: "ANY" },
+            function (info) {
+              if (info && info.email && info.email.trim() !== "") {
+                resolve(info.email.toLowerCase());
+              } else {
+                getUserEmailViaOAuth().then(resolve).catch(reject);
+              }
+            }
+          );
+        } catch (e) {
+          getUserEmailViaOAuth().then(resolve).catch(reject);
         }
-      },
-    );
+      } else {
+        getUserEmailViaOAuth().then(resolve).catch(reject);
+      }
+    });
+  }
+
+  function getUserEmailViaOAuth() {
+    var CLIENT_ID = "785695260710-ld29eb2hrbpeve4nu2b9u2euql5j4dgh.apps.googleusercontent.com";
+    var REDIRECT_URI = chrome.identity.getRedirectURL();
+    var authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
+      new URLSearchParams({
+        client_id: CLIENT_ID,
+        response_type: "token",
+        redirect_uri: REDIRECT_URI,
+        scope: "openid email",
+        prompt: "select_account"
+      }).toString();
+
+    return new Promise(function (resolve, reject) {
+      chrome.identity.launchWebAuthFlow(
+        { url: authUrl, interactive: true },
+        function (responseUrl) {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!responseUrl) {
+            reject(new Error("Auth flow returned no URL"));
+            return;
+          }
+          var hash = new URL(responseUrl).hash.substring(1);
+          var token = new URLSearchParams(hash).get("access_token");
+          if (!token) {
+            reject(new Error("No access_token in response"));
+            return;
+          }
+          fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+            headers: { Authorization: "Bearer " + token }
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              if (data && data.email) resolve(data.email.toLowerCase());
+              else reject(new Error("No email in userinfo response"));
+            })
+            .catch(reject);
+        }
+      );
+    });
   }
 
   initApp();

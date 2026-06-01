@@ -12,15 +12,38 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
 });
 
+function resolveEmailForBackground(callback) {
+    // Chrome/Edge path: use the silent profile API if it exists.
+    if (chrome.identity && typeof chrome.identity.getProfileUserInfo === 'function') {
+        try {
+            chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, function(info) {
+                if (info && info.email) {
+                    callback(info.email.toLowerCase());
+                } else {
+                    // Fall back to whatever the popup cached on first sign-in.
+                    chrome.storage.local.get(['cachedUserEmail'], function(r) {
+                        callback(r && r.cachedUserEmail ? r.cachedUserEmail : null);
+                    });
+                }
+            });
+            return;
+        } catch (e) { /* fall through */ }
+    }
+    // Firefox path: no silent identity API. Rely on the popup's cache.
+    chrome.storage.local.get(['cachedUserEmail'], function(r) {
+        callback(r && r.cachedUserEmail ? r.cachedUserEmail : null);
+    });
+}
+
 function checkServerForNotifications() {
-    chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, function(info) {
-        if (info && info.email) {
+    resolveEmailForBackground(function(userEmail) {
+        if (userEmail) {
             const apiUrl = "https://qb.altiusnxt.tech/api/check_notifications";
 
             fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userEmail: info.email.toLowerCase() })
+                body: JSON.stringify({ userEmail: userEmail })
             })
             .then(res => {
                 if (res.status === 404) {

@@ -124,8 +124,98 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.storage.local.set({ shownNotifIds: [] });
         }
         sendResponse({ status: "badge_cleared" });
+        return;
+    }
+
+    if (message.action === "get_user_email") {
+        // Async: keep the message channel open until sendResponse fires.
+        getUserEmailBackground()
+            .then(function (email) {
+                try { chrome.storage.local.set({ cachedUserEmail: email }); } catch (e) {}
+                sendResponse({ email: email });
+            })
+            .catch(function (err) {
+                sendResponse({ error: (err && err.message) || String(err) });
+            });
+        return true;
     }
 });
+
+// ----------------------------------------------------------------
+// EMAIL DETECTION (runs in background where chrome.identity exists)
+// Chrome/Edge silent path: chrome.identity.getProfileUserInfo.
+// Firefox path: launchWebAuthFlow against Google, proxied through
+// qb.altiusnxt.tech/oauth/firefox-callback so Google accepts the URI.
+// ----------------------------------------------------------------
+function getUserEmailBackground() {
+    return new Promise(function (resolve, reject) {
+        var hasGetProfile = chrome.identity &&
+                            typeof chrome.identity.getProfileUserInfo === 'function';
+        if (hasGetProfile) {
+            try {
+                chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, function (info) {
+                    if (info && info.email && info.email.trim() !== '') {
+                        resolve(info.email.toLowerCase());
+                    } else {
+                        getUserEmailViaOAuthBackground().then(resolve).catch(reject);
+                    }
+                });
+            } catch (e) {
+                getUserEmailViaOAuthBackground().then(resolve).catch(reject);
+            }
+        } else {
+            getUserEmailViaOAuthBackground().then(resolve).catch(reject);
+        }
+    });
+}
+
+function getUserEmailViaOAuthBackground() {
+    var CLIENT_ID = "785695260710-ld29eb2hrbpeve4nu2b9u2euql5j4dgh.apps.googleusercontent.com";
+    var REDIRECT_URI = "https://qb.altiusnxt.tech/oauth/firefox-callback";
+    var authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
+        new URLSearchParams({
+            client_id: CLIENT_ID,
+            response_type: "token",
+            redirect_uri: REDIRECT_URI,
+            scope: "openid email",
+            prompt: "select_account"
+        }).toString();
+
+    return new Promise(function (resolve, reject) {
+        if (!chrome.identity || typeof chrome.identity.launchWebAuthFlow !== "function") {
+            reject(new Error("chrome.identity.launchWebAuthFlow not available"));
+            return;
+        }
+        chrome.identity.launchWebAuthFlow(
+            { url: authUrl, interactive: true },
+            function (responseUrl) {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                    return;
+                }
+                if (!responseUrl) {
+                    reject(new Error("Auth flow returned no URL"));
+                    return;
+                }
+                var hash = new URL(responseUrl).hash.substring(1);
+                var token = new URLSearchParams(hash).get("access_token");
+                if (!token) {
+                    reject(new Error("No access_token in response"));
+                    return;
+                }
+                fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+                    headers: { Authorization: "Bearer " + token }
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data && data.email) resolve(data.email.toLowerCase());
+                        else reject(new Error("No email in userinfo response"));
+                    })
+                    .catch(reject);
+            }
+        );
+    });
+}
 
 // 3. SIDEBAR INJECTION
 chrome.action.onClicked.addListener((tab) => {

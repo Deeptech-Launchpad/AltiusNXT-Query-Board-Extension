@@ -113,80 +113,29 @@ document.addEventListener("DOMContentLoaded", function () {
   // ======================================================
   // CROSS-BROWSER EMAIL DETECTION
   // ======================================================
-  // Chrome/Edge: uses chrome.identity.getProfileUserInfo (silent, no popup).
-  // Firefox: falls back to OAuth via chrome.identity.launchWebAuthFlow
-  // (shows Google consent screen on first install, silent after that).
+  // The popup runs in the host page's content-script context, where
+  // chrome.identity is not exposed. Delegate the whole detection
+  // (silent + OAuth fallback) to background.js, which has full
+  // chrome.identity access in both Chrome and Firefox.
   function getUserEmail() {
     return new Promise(function (resolve, reject) {
-      var hasGetProfile = chrome.identity &&
-                          typeof chrome.identity.getProfileUserInfo === "function";
-
-      if (hasGetProfile) {
-        try {
-          chrome.identity.getProfileUserInfo(
-            { accountStatus: "ANY" },
-            function (info) {
-              if (info && info.email && info.email.trim() !== "") {
-                resolve(info.email.toLowerCase());
-              } else {
-                getUserEmailViaOAuth().then(resolve).catch(reject);
-              }
-            }
-          );
-        } catch (e) {
-          getUserEmailViaOAuth().then(resolve).catch(reject);
-        }
-      } else {
-        getUserEmailViaOAuth().then(resolve).catch(reject);
-      }
-    });
-  }
-
-  function getUserEmailViaOAuth() {
-    var CLIENT_ID = "785695260710-ld29eb2hrbpeve4nu2b9u2euql5j4dgh.apps.googleusercontent.com";
-    // Use server-side proxy as Google's redirect_uri (Google rejects the
-    // *.extensions.allizom.org URL Firefox would normally generate). The proxy
-    // forwards Google's token fragment to the extension's own getRedirectURL,
-    // which is what launchWebAuthFlow watches for.
-    var REDIRECT_URI = "https://qb.altiusnxt.tech/oauth/firefox-callback";
-    var authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
-      new URLSearchParams({
-        client_id: CLIENT_ID,
-        response_type: "token",
-        redirect_uri: REDIRECT_URI,
-        scope: "openid email",
-        prompt: "select_account"
-      }).toString();
-
-    return new Promise(function (resolve, reject) {
-      chrome.identity.launchWebAuthFlow(
-        { url: authUrl, interactive: true },
-        function (responseUrl) {
+      try {
+        chrome.runtime.sendMessage({ action: "get_user_email" }, function (response) {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
             return;
           }
-          if (!responseUrl) {
-            reject(new Error("Auth flow returned no URL"));
-            return;
+          if (response && response.email) {
+            resolve(response.email);
+          } else if (response && response.error) {
+            reject(new Error(response.error));
+          } else {
+            reject(new Error("No response from background"));
           }
-          var hash = new URL(responseUrl).hash.substring(1);
-          var token = new URLSearchParams(hash).get("access_token");
-          if (!token) {
-            reject(new Error("No access_token in response"));
-            return;
-          }
-          fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-            headers: { Authorization: "Bearer " + token }
-          })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-              if (data && data.email) resolve(data.email.toLowerCase());
-              else reject(new Error("No email in userinfo response"));
-            })
-            .catch(reject);
-        }
-      );
+        });
+      } catch (e) {
+        reject(e);
+      }
     });
   }
 

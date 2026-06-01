@@ -80,7 +80,13 @@ document.addEventListener("DOMContentLoaded", function () {
     categoryInput.disabled = true;
     attributeInput.disabled = true;
 
-    chrome.action.setBadgeText({ text: "" });
+    try {
+      if (chrome.action && typeof chrome.action.setBadgeText === "function") {
+        chrome.action.setBadgeText({ text: "" });
+      } else {
+        chrome.runtime.sendMessage({ action: "clear_badge" });
+      }
+    } catch (e) {}
 
     getUserEmail()
       .then(function (email) {

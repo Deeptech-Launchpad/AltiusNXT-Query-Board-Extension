@@ -1,7 +1,7 @@
 import psycopg2
 import smtplib
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
@@ -17,6 +17,39 @@ def get_db_connection():
         user=os.getenv('DB_USER'),
         password=os.getenv('DB_PASSWORD')
     )
+
+def _parse_holidays():
+    """Parse HOLIDAYS env var (comma-separated YYYY-MM-DD) into a set of date objects."""
+    raw = os.getenv('HOLIDAYS', '').strip()
+    if not raw:
+        return set()
+    holidays = set()
+    for token in raw.split(','):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            holidays.add(date.fromisoformat(token))
+        except ValueError:
+            print(f"WARNING: Invalid HOLIDAYS date skipped: {token}")
+    return holidays
+
+def is_leave_day(d):
+    """True if d is a Sunday or appears in HOLIDAYS env var."""
+    if d.weekday() == 6:
+        return True
+    return d in _parse_holidays()
+
+def get_report_date(today=None):
+    """Most recent working day strictly before today, skipping Sundays and HOLIDAYS."""
+    if today is None:
+        today = date.today()
+    d = today - timedelta(days=1)
+    for _ in range(14):
+        if not is_leave_day(d):
+            return d
+        d = d - timedelta(days=1)
+    return today - timedelta(days=1)
 
 def send_daily_report():
     print("DEBUG: Starting report generation...")
@@ -36,14 +69,9 @@ def send_daily_report():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # 1. Find the last date with activity before today
-        cur.execute("SELECT MAX(timestamp::date) FROM user_activity_logs WHERE timestamp::date < CURRENT_DATE")
-        last_active_day = cur.fetchone()[0]
-
-        if not last_active_day:
-            print("No previous activity data found.")
-            return
-
+        # 1. Determine which day to report on: most recent working day before today.
+        # Skips Sunday and any dates listed in HOLIDAYS env var.
+        last_active_day = get_report_date()
         report_date_str = last_active_day.strftime('%d-%m-%Y')
 
         # 2. Calculate Metrics (Using Activity Logs for all counts)

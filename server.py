@@ -1445,64 +1445,110 @@ def export_logs():
     finally:
         conn.close()
     
+def _already_sent_today(lock_file_path):
+    """Check if today's date already appears as a successful send in the lock file."""
+    try:
+        with open(lock_file_path, 'r') as rf:
+            content = rf.read()
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        return f"Report sent successfully at: {today_str}" in content
+    except (FileNotFoundError, IOError):
+        return False
+
 def trigger_scheduled_report():
-    """Attempts to send the daily report. Uses file locking to prevent duplicate emails 
-    if multiple server workers are running."""
+    """Send the daily report with file-lock + same-day dedup across workers.
+    Skips if today is a leave day (Sunday or in HOLIDAYS env var)."""
+    from report_service import is_leave_day
+    today = datetime.now().date()
+
+    if is_leave_day(today):
+        return
+
     lock_file_path = os.path.join(os.getcwd(), 'query_board_report.lock')
-    
-    # We open (or create) the file
-    f = open(lock_file_path, 'a+') # Use a+ to avoid truncating existing log
-    
+
+    if _already_sent_today(lock_file_path):
+        return
+
+    f = open(lock_file_path, 'a+')
+
     if fcntl is None:
         # Windows compatibility
         print("INFO: (Windows) Sending Scheduled Report...")
-        try:
-            send_daily_report()
-        except Exception as e:
-            print(f"⚠️ Scheduled Report Error: {e}")
-        return
-
-    # Unix locking logic for production (Hostinger)
-    try:
-        # Try to get an EXCLUSIVE lock. 
-        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        
-        print("[Worker ID: {}] Lock acquired. Sending Daily Report...".format(os.getpid()))
-        
         try:
             send_daily_report()
             f.write(f"\nReport sent successfully at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             f.flush()
         except Exception as e:
             print(f"⚠️ Scheduled Report Error: {e}")
-        
-        # We release the lock after sending so it can be re-locked tomorrow
+        finally:
+            f.close()
+        return
+
+    # Unix locking logic for production (Hostinger)
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        # Re-check after acquiring lock — another worker may have just sent.
+        f.seek(0)
+        content = f.read()
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        if f"Report sent successfully at: {today_str}" in content:
+            fcntl.flock(f, fcntl.LOCK_UN)
+            f.close()
+            return
+
+        print("[Worker ID: {}] Lock acquired. Sending Daily Report...".format(os.getpid()))
+
+        try:
+            send_daily_report()
+            f.write(f"\nReport sent successfully at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            f.flush()
+        except Exception as e:
+            print(f"⚠️ Scheduled Report Error: {e}")
+
         fcntl.flock(f, fcntl.LOCK_UN)
 
     except (IOError, OSError):
-        # This means another worker process already grabbed the lock for this minute
+        # Another worker holds the lock.
         pass
+    finally:
+        try:
+            f.close()
+        except Exception:
+            pass
 
 def run_scheduler():
-    """Background thread that monitors time and triggers reports."""
-    print("Background Scheduler Started. Monitoring for 09:30 AM daily...")
+    """Background thread that fires the daily report at REPORT_TIME.
+    Skips Sundays and HOLIDAYS. Catches up on startup if today's slot was missed."""
+    from report_service import is_leave_day
+    target_time = os.getenv('REPORT_TIME', '09:30')
+    print(f"Background Scheduler Started. Target: {target_time} server-time daily; skips Sun + HOLIDAYS.")
+
+    # Catch-up: if today is a working day and target_time has already passed,
+    # try once on startup (the dedup check will skip if already sent).
+    try:
+        now = datetime.now()
+        if not is_leave_day(now.date()):
+            target_hour, target_minute = map(int, target_time.split(':'))
+            target_dt = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
+            if now >= target_dt:
+                print("Catch-up: target time already passed today, attempting send...")
+                trigger_scheduled_report()
+    except Exception as e:
+        print(f"⚠️ Catch-up Error: {e}")
+
     last_sent_date = None
-    
     while True:
         try:
             now = datetime.now()
             current_time = now.strftime("%H:%M")
             current_date = now.strftime("%Y-%m-%d")
-            
-            # Target time from .env or default to 09:30
             target_time = os.getenv('REPORT_TIME', '09:30')
-            
-            # If it's the target time and we haven't sent it today
-            if current_time == target_time and last_sent_date != current_date:
+
+            if current_time == target_time and last_sent_date != current_date and not is_leave_day(now.date()):
                 trigger_scheduled_report()
                 last_sent_date = current_date
-                
-            # Sleep for 30 seconds to avoid high CPU usage but ensure we don't miss the minute
+
             time.sleep(30)
         except Exception as e:
             print(f"⚠️ Scheduler Loop Error: {e}")

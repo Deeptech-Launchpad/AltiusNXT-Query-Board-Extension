@@ -170,6 +170,10 @@ function getUserEmailBackground() {
 }
 
 function getUserEmailViaOAuthBackground() {
+    // Tab-based OAuth: avoids chrome.identity.launchWebAuthFlow, which Firefox
+    // silently fails when redirect_uri != getRedirectURL(). We open a real
+    // tab, wait for it to navigate to our callback URL on qb.altiusnxt.tech,
+    // pluck the token out of the URL fragment, then close the tab.
     var CLIENT_ID = "785695260710-ld29eb2hrbpeve4nu2b9u2euql5j4dgh.apps.googleusercontent.com";
     var REDIRECT_URI = "https://qb.altiusnxt.tech/oauth/firefox-callback";
     var authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
@@ -182,38 +186,73 @@ function getUserEmailViaOAuthBackground() {
         }).toString();
 
     return new Promise(function (resolve, reject) {
-        if (!chrome.identity || typeof chrome.identity.launchWebAuthFlow !== "function") {
-            reject(new Error("chrome.identity.launchWebAuthFlow not available"));
-            return;
-        }
-        chrome.identity.launchWebAuthFlow(
-            { url: authUrl, interactive: true },
-            function (responseUrl) {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
+        chrome.tabs.create({ url: authUrl, active: true }, function (tab) {
+            if (chrome.runtime.lastError || !tab || tab.id == null) {
+                reject(new Error((chrome.runtime.lastError && chrome.runtime.lastError.message) || "Failed to open auth tab"));
+                return;
+            }
+            var oauthTabId = tab.id;
+            var settled = false;
+
+            function cleanup() {
+                try { chrome.tabs.onUpdated.removeListener(onUpdated); } catch (e) {}
+                try { chrome.tabs.onRemoved.removeListener(onRemoved); } catch (e) {}
+                clearTimeout(timeoutId);
+            }
+
+            function finish(err, email) {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                try { chrome.tabs.remove(oauthTabId); } catch (e) {}
+                if (err) reject(err);
+                else resolve(email);
+            }
+
+            var timeoutId = setTimeout(function () {
+                finish(new Error("OAuth tab timed out (180s)"));
+            }, 180000);
+
+            function onRemoved(closedTabId) {
+                if (closedTabId === oauthTabId) {
+                    finish(new Error("User closed the sign-in tab"));
+                }
+            }
+
+            function onUpdated(updatedTabId, changeInfo, updatedTab) {
+                if (updatedTabId !== oauthTabId) return;
+                var candidate = changeInfo.url || (updatedTab && updatedTab.url);
+                if (!candidate || candidate.indexOf(REDIRECT_URI) !== 0) return;
+
+                // Token is in URL fragment (#access_token=...).
+                var hash = "";
+                try { hash = new URL(candidate).hash.substring(1); } catch (e) {}
+                var params = new URLSearchParams(hash);
+                var token = params.get("access_token");
+                var oauthError = params.get("error");
+                if (oauthError) {
+                    finish(new Error("OAuth error: " + oauthError));
                     return;
                 }
-                if (!responseUrl) {
-                    reject(new Error("Auth flow returned no URL"));
-                    return;
-                }
-                var hash = new URL(responseUrl).hash.substring(1);
-                var token = new URLSearchParams(hash).get("access_token");
                 if (!token) {
-                    reject(new Error("No access_token in response"));
+                    finish(new Error("No access_token in callback URL"));
                     return;
                 }
+
                 fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
                     headers: { Authorization: "Bearer " + token }
                 })
                     .then(function (res) { return res.json(); })
                     .then(function (data) {
-                        if (data && data.email) resolve(data.email.toLowerCase());
-                        else reject(new Error("No email in userinfo response"));
+                        if (data && data.email) finish(null, data.email.toLowerCase());
+                        else finish(new Error("No email in userinfo response"));
                     })
-                    .catch(reject);
+                    .catch(function (err) { finish(err); });
             }
-        );
+
+            chrome.tabs.onUpdated.addListener(onUpdated);
+            chrome.tabs.onRemoved.addListener(onRemoved);
+        });
     });
 }
 

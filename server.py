@@ -145,38 +145,27 @@ def health_check():
     return jsonify({"status": "online", "message": "Query Board Server is running"}), 200
 
 
-# Google rejects *.extensions.allizom.org as an OAuth redirect URI (Mozilla's
-# domain, not ours). Firefox's launchWebAuthFlow watches for navigation to
-# getRedirectURL() — so this callback page just receives Google's redirect
-# (with token in URL hash) and re-redirects to the extension's URL, preserving
-# the hash. Firefox sees that navigation and returns the token to popup.js.
+# OAuth callback for the browser extension. The extension opens this URL in a
+# real tab (chrome.tabs.create) so the background script can watch for the
+# navigation, pluck the access_token from the URL fragment, and close the tab.
+# This page just displays a "you can close this" message in case the user sees
+# it briefly. The token is in the URL fragment — never sent to this server.
 @app.route('/oauth/firefox-callback', methods=['GET'])
 def oauth_firefox_callback():
-    ext_redirect = "https://c755ff46c7a09327672a04008c60aa8930ae56cc.extensions.allizom.org/"
     html = """<!DOCTYPE html>
 <html>
 <head>
 <title>Signing you in...</title>
 <meta name="referrer" content="no-referrer">
-<script>
-(function () {
-  var EXT = """ + repr(ext_redirect) + """;
-  // Forward both the URL fragment (success case: #access_token=...) and any
-  // query string (error case: ?error=access_denied). Hash carries through.
-  var search = window.location.search || "";
-  var hash = window.location.hash || "";
-  if (!hash && search) {
-    // Convert error querystring to fragment so popup.js's URL.hash parser sees it.
-    hash = "#" + search.substring(1);
-  }
-  window.location.replace(EXT + hash);
-})();
-</script>
+<style>
+body { font-family: -apple-system, Segoe UI, sans-serif; text-align: center; margin-top: 80px; color: #333; }
+h2 { color: #4d02a3; margin-bottom: 12px; }
+p { color: #666; }
+</style>
 </head>
 <body>
-<p style="font-family: sans-serif; text-align: center; margin-top: 40px; color: #555;">
-  Signing you in to Query Assistant...
-</p>
+<h2>Signing you in to Query Assistant...</h2>
+<p>This tab will close automatically.</p>
 </body>
 </html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}

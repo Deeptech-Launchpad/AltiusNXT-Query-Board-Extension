@@ -113,29 +113,52 @@ document.addEventListener("DOMContentLoaded", function () {
   // ======================================================
   // CROSS-BROWSER EMAIL DETECTION
   // ======================================================
-  // The popup runs in the host page's content-script context, where
-  // chrome.identity is not exposed. Delegate the whole detection
-  // (silent + OAuth fallback) to background.js, which has full
-  // chrome.identity access in both Chrome and Firefox.
+  // Background-bridged email detection.
+  // Firefox kills the popup<->background message channel during the
+  // multi-second Google OAuth flow ("Conduits destroyed before query
+  // resolved"). So we use chrome.storage as the bridge instead:
+  //   1. Read cachedUserEmail (set on previous sign-in).
+  //   2. If absent, ask background to start OAuth and wait for the
+  //      storage entry to appear.
   function getUserEmail() {
     return new Promise(function (resolve, reject) {
-      try {
-        chrome.runtime.sendMessage({ action: "get_user_email" }, function (response) {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-            return;
-          }
-          if (response && response.email) {
-            resolve(response.email);
-          } else if (response && response.error) {
-            reject(new Error(response.error));
-          } else {
-            reject(new Error("No response from background"));
-          }
-        });
-      } catch (e) {
-        reject(e);
-      }
+      chrome.storage.local.get(["cachedUserEmail"], function (r) {
+        if (r && r.cachedUserEmail) {
+          resolve(r.cachedUserEmail);
+          return;
+        }
+
+        var done = false;
+        var timeoutId = setTimeout(function () {
+          if (done) return;
+          done = true;
+          try { chrome.storage.onChanged.removeListener(storageListener); } catch (e) {}
+          reject(new Error("OAuth timed out. Click the extension again after signing in."));
+        }, 90000);
+
+        function storageListener(changes, area) {
+          if (area !== "local" || !changes.cachedUserEmail) return;
+          var newEmail = changes.cachedUserEmail.newValue;
+          if (!newEmail || done) return;
+          done = true;
+          clearTimeout(timeoutId);
+          try { chrome.storage.onChanged.removeListener(storageListener); } catch (e) {}
+          resolve(newEmail);
+        }
+        chrome.storage.onChanged.addListener(storageListener);
+
+        // Fire-and-forget. Don't await a response — Firefox will tear
+        // down the channel during launchWebAuthFlow's user wait.
+        try {
+          chrome.runtime.sendMessage({ action: "get_user_email" }, function () {
+            // Swallow chrome.runtime.lastError silently; the storage
+            // listener is the real signal.
+            void chrome.runtime.lastError;
+          });
+        } catch (e) {
+          // Background still gets the message via its own listener.
+        }
+      });
     });
   }
 

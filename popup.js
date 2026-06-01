@@ -144,7 +144,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function getUserEmailViaOAuth() {
     var CLIENT_ID = "785695260710-ld29eb2hrbpeve4nu2b9u2euql5j4dgh.apps.googleusercontent.com";
-    var REDIRECT_URI = chrome.identity.getRedirectURL();
+    // Use server-side proxy as Google's redirect_uri (Google rejects the
+    // *.extensions.allizom.org URL Firefox would normally generate). The proxy
+    // forwards Google's token fragment to the extension's own getRedirectURL,
+    // which is what launchWebAuthFlow watches for.
+    var REDIRECT_URI = "https://qb.altiusnxt.tech/oauth/firefox-callback";
     var authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
       new URLSearchParams({
         client_id: CLIENT_ID,

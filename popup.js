@@ -2192,7 +2192,10 @@ document.addEventListener("DOMContentLoaded", function () {
         if (currentUserRole === "SME") options.push("Client_PL");
         let selectOptions = options.map((r) => `<option value="${r}">${r === "Client_PL" ? "Forward to PL (Client)" : r}</option>`).join("");
 
-        card.innerHTML = `
+        const adminQidValue = item.custom_query_id || item.id || 'N/A';
+        const adminQidStrip = `<div style="background: linear-gradient(135deg, #4b0082 0%, #764ba2 100%); color:#fff; padding:6px 10px; margin: 0 0 8px 0; border-radius:6px; font-size:11px; display:flex; align-items:center; justify-content:space-between;"><span style="display:flex; align-items:center; gap:6px;"><i class="fas fa-hashtag"></i> <strong>Query ID:</strong> <span style="font-family:'Consolas','Menlo',monospace; letter-spacing:0.3px;">${adminQidValue}</span></span><button type="button" class="copy-qid-btn" data-qid="${adminQidValue}" title="Copy Query ID" style="background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.45); color:#fff; cursor:pointer; padding:3px 8px; border-radius:4px; font-size:11px; line-height:1;"><i class="fas fa-copy"></i></button></div>`;
+
+        card.innerHTML = adminQidStrip + `
             <div style="background: #f8f9fa; padding: 5px 8px; border-bottom: 1px solid #eee; margin-bottom: 8px; font-size: 11px; color: #2c3e50; display: flex; align-items: center; gap: 10px;">
                 <span style="display:flex; align-items:center; gap:4px;"><i class="fas fa-folder"></i> <strong>Project:</strong> ${item.project}</span>
                 <span style="color: #ccc;">|</span>
@@ -2335,7 +2338,10 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
 
-        card.innerHTML = `
+        const userQidValue = item.custom_query_id || item.id || 'N/A';
+        const userQidStrip = `<div style="background: linear-gradient(135deg, #4b0082 0%, #764ba2 100%); color:#fff; padding:6px 10px; margin: 0 0 8px 0; border-radius:6px; font-size:11px; display:flex; align-items:center; justify-content:space-between;"><span style="display:flex; align-items:center; gap:6px;"><i class="fas fa-hashtag"></i> <strong>Query ID:</strong> <span style="font-family:'Consolas','Menlo',monospace; letter-spacing:0.3px;">${userQidValue}</span></span><button type="button" class="copy-qid-btn" data-qid="${userQidValue}" title="Copy Query ID" style="background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.45); color:#fff; cursor:pointer; padding:3px 8px; border-radius:4px; font-size:11px; line-height:1;"><i class="fas fa-copy"></i></button></div>`;
+
+        card.innerHTML = userQidStrip + `
             ${contextHeader}
             <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:8px;">
                 <div style="display:flex; align-items:center; gap:8px;">
@@ -2395,6 +2401,42 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     resultsContainer.querySelectorAll(".escalate-btn").forEach((btn) => {
       btn.addEventListener("click", function () { const qId = this.getAttribute("data-id"); const select = document.getElementById(`escalate-select-${qId}`); escalateQuery(qId, select.value); });
+    });
+
+    // --- COPY QUERY ID BUTTON LISTENER ---
+    resultsContainer.querySelectorAll(".copy-qid-btn").forEach((btn) => {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const qid = this.getAttribute("data-qid");
+        if (!qid) return;
+        const original = this.innerHTML;
+        const restore = () => { this.innerHTML = original; };
+        const doFallback = () => {
+          // Fallback for browsers without navigator.clipboard or insecure contexts.
+          const ta = document.createElement("textarea");
+          ta.value = qid;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "absolute";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand("copy"); } catch (err) {}
+          document.body.removeChild(ta);
+        };
+        const onSuccess = () => {
+          this.innerHTML = '<i class="fas fa-check"></i>';
+          setTimeout(restore, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(qid).then(onSuccess).catch(() => {
+            doFallback();
+            onSuccess();
+          });
+        } else {
+          doFallback();
+          onSuccess();
+        }
+      });
     });
 
     // --- STRIKE BUTTON LISTENER ---

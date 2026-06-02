@@ -130,6 +130,18 @@ def run_startup_migrations():
             ADD COLUMN IF NOT EXISTS is_response_deprecated BOOLEAN DEFAULT FALSE,
             ADD COLUMN IF NOT EXISTS corrected_response TEXT
         """)
+        # Per-(project prefix, year-month) counter for custom_query_id generation.
+        # Atomic via ON CONFLICT — replaces the old single global query_id_seq
+        # which caused duplicates after a DB restore and made IDs share numbers
+        # across projects.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS query_counters (
+                prefix VARCHAR(10) NOT NULL,
+                year_month VARCHAR(6) NOT NULL,
+                counter INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (prefix, year_month)
+            )
+        """)
         conn.commit()
         print("✅ Startup migrations applied successfully.")
     except Exception as e:
@@ -957,10 +969,22 @@ def submit_query():
     
     try:
         # --- 2. UNIQUE ID GENERATION ---
-        prefix = project_name[:3].upper()
+        # Format: {PREFIX}_{MMYYYY}_{NNN} — counter restarts per project per month.
+        # Atomic UPSERT against query_counters guarantees no duplicates even under
+        # concurrent inserts. Strip non-alpha chars so "MK Marketing" and "MK-Marketing"
+        # share the same prefix; fall back to UNK if the project name has no letters.
+        clean_proj = re.sub(r'[^A-Za-z]', '', project_name or '')
+        prefix = (clean_proj[:3] or 'UNK').upper()
         date_part = datetime.now().strftime("%m%Y")
-        cur.execute("SELECT nextval('query_id_seq')")
-        custom_id = f"{prefix}_{date_part}{str(cur.fetchone()[0]).zfill(3)}"
+        cur.execute("""
+            INSERT INTO query_counters (prefix, year_month, counter)
+            VALUES (%s, %s, 1)
+            ON CONFLICT (prefix, year_month) DO UPDATE
+            SET counter = query_counters.counter + 1
+            RETURNING counter
+        """, (prefix, date_part))
+        seq = cur.fetchone()[0]
+        custom_id = f"{prefix}_{date_part}_{str(seq).zfill(3)}"
 
         # --- 3. DATABASE INSERTION ---
         sql = """

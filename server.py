@@ -1038,14 +1038,50 @@ def escalate_query():
     if user_email not in ADMIN_EMAILS:
         return jsonify({"status": "error", "message": "Unauthorized"}), 403
 
+    # Map the destination role label to its email list so we know which
+    # admins to notify. Client_PL forwards into the regular PL pool.
+    role_to_list = {
+        'TL': TL_LIST,
+        'PL': PL_LIST,
+        'Client_PL': PL_LIST,
+        'PM': PM_LIST,
+        'SME': SME_LIST,
+    }
+    notify_list = role_to_list.get(next_role, [])
+
     conn = get_db_connection()
     cur = conn.cursor()
-    
-    # Update the recipient group and record the forwarder
-    sql = "UPDATE query_logs SET recipient_type = %s, forwarded_by = %s, updated_at = NOW() WHERE id = %s"
+
     try:
-        cur.execute(sql, (next_role, user_email, query_id))
+        # 1. Update the recipient group and record the forwarder. Pull the
+        #    human-readable custom_query_id back so the notification message
+        #    can reference it.
+        cur.execute(
+            "UPDATE query_logs SET recipient_type = %s, forwarded_by = %s, "
+            "updated_at = NOW() WHERE id = %s RETURNING custom_query_id",
+            (next_role, user_email, query_id)
+        )
+        row = cur.fetchone()
+        custom_id = (row[0] if row and row[0] else f"#{query_id}")
         conn.commit()
+
+        # 2. Fan-out notifications to every admin in the destination role
+        #    so the whole pool sees the assignment (not just whoever opens
+        #    the extension next). Skip self in the unlikely case the
+        #    forwarder is also in the destination list.
+        try:
+            qid_int = int(query_id)
+        except (TypeError, ValueError):
+            qid_int = None
+        for admin_email in notify_list:
+            if admin_email == user_email:
+                continue
+            create_system_notification(
+                admin_email,
+                f"Query {custom_id} escalated from {user_email}",
+                qid_int
+            )
+
         return jsonify({"status": "success", "message": f"Assigned to {next_role}"})
     except Exception as e:
         print(f"Escalation Error: {e}")

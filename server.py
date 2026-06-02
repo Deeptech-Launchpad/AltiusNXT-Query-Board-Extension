@@ -969,10 +969,13 @@ def submit_query():
     
     try:
         # --- 2. UNIQUE ID GENERATION ---
-        # Format: {PREFIX}_{MMYYYY}_{NNN} — counter restarts per project per month.
-        # Atomic UPSERT against query_counters guarantees no duplicates even under
-        # concurrent inserts. Strip non-alpha chars so "MK Marketing" and "MK-Marketing"
-        # share the same prefix; fall back to UNK if the project name has no letters.
+        # Format: {PREFIX}_{MMYYYY}_{NNNNNN} — last segment is the row's
+        # PRIMARY KEY id zero-padded to 6 digits, so it's unique by definition.
+        # Earlier counter-based attempts (CTE ROW_NUMBER, PL/pgSQL loop) both
+        # produced duplicates inside large single-microsecond bulk-imported
+        # buckets, so we sidestep the sequencing problem entirely.
+        # We still maintain query_counters in lockstep so it stays accurate
+        # for any reporting that wants per-(project, month) counts.
         clean_proj = re.sub(r'[^A-Za-z]', '', project_name or '')
         prefix = (clean_proj[:3] or 'UNK').upper()
         date_part = datetime.now().strftime("%m%Y")
@@ -981,30 +984,37 @@ def submit_query():
             VALUES (%s, %s, 1)
             ON CONFLICT (prefix, year_month) DO UPDATE
             SET counter = query_counters.counter + 1
-            RETURNING counter
         """, (prefix, date_part))
-        seq = cur.fetchone()[0]
-        custom_id = f"{prefix}_{date_part}_{str(seq).zfill(3)}"
 
         # --- 3. DATABASE INSERTION ---
+        # Insert with NULL custom_query_id, get the row's id back, then update
+        # custom_query_id using that id. Two statements in one transaction —
+        # always consistent.
         sql = """
             INSERT INTO query_logs (
-                custom_query_id, project_name, batch_name, category, 
-                attribute_name, sku_id, mfr_part_number, manufacturer, 
+                custom_query_id, project_name, batch_name, category,
+                attribute_name, sku_id, mfr_part_number, manufacturer,
                 query_text, reference_url, status, user_email, recipient_type
-            ) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Pending', %s, %s) 
+            )
+            VALUES (NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Pending', %s, %s)
             RETURNING id
         """
-        
+
         cur.execute(sql, (
-            custom_id, project_name, data.get('batch', ''), data.get('category', ''), 
-            attribute_str, data.get('sku', ''), data.get('mfr_part', ''), 
-            data.get('mfr_name', ''), data.get('query', ''), data.get('url', ''), 
+            project_name, data.get('batch', ''), data.get('category', ''),
+            attribute_str, data.get('sku', ''), data.get('mfr_part', ''),
+            data.get('mfr_name', ''), data.get('query', ''), data.get('url', ''),
             user_email, recipient_type
         ))
-        
+
         internal_id = cur.fetchone()[0]
+        # Now that we have the row's id, build the custom_query_id and
+        # write it back. id is the PK so this is guaranteed unique.
+        custom_id = f"{prefix}_{date_part}_{str(internal_id).zfill(6)}"
+        cur.execute(
+            "UPDATE query_logs SET custom_query_id = %s WHERE id = %s",
+            (custom_id, internal_id)
+        )
         conn.commit()
 
         # --- 4. SYSTEM NOTIFICATIONS ---

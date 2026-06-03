@@ -130,16 +130,15 @@ def run_startup_migrations():
             ADD COLUMN IF NOT EXISTS is_response_deprecated BOOLEAN DEFAULT FALSE,
             ADD COLUMN IF NOT EXISTS corrected_response TEXT
         """)
-        # Per-(project prefix, year-month) counter for custom_query_id generation.
-        # Atomic via ON CONFLICT — replaces the old single global query_id_seq
-        # which caused duplicates after a DB restore and made IDs share numbers
-        # across projects.
+        # Per-PROJECT counter for custom_query_id generation. Counter continues
+        # across months for the same project (does NOT reset per month). Atomic
+        # via ON CONFLICT (prefix). The v5 migration drops the old per-(prefix,
+        # year_month) schema and recreates this table with prefix-only PK; this
+        # CREATE IF NOT EXISTS only fires on a fresh install.
         cur.execute("""
             CREATE TABLE IF NOT EXISTS query_counters (
-                prefix VARCHAR(10) NOT NULL,
-                year_month VARCHAR(6) NOT NULL,
-                counter INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY (prefix, year_month)
+                prefix VARCHAR(10) PRIMARY KEY,
+                counter INTEGER NOT NULL DEFAULT 0
             )
         """)
         conn.commit()
@@ -969,21 +968,24 @@ def submit_query():
     
     try:
         # --- 2. UNIQUE ID GENERATION ---
-        # Format: {PREFIX}_{MMYYYY}_{NNN} — NNN is the next counter for this
-        # (prefix, year_month) bucket from query_counters. Atomic UPSERT with
-        # RETURNING gives a race-condition-safe per-bucket counter. The format
-        # zero-pads to 3 digits; once a bucket exceeds 999 in a month, the
-        # number just keeps growing (e.g. "1000") without truncation.
+        # Format: {PREFIX}_{MMYYYY}_{NNN}
+        #   PREFIX  = first 3 alpha chars of project_name (uppercase), UNK fallback
+        #   MMYYYY  = month + year of THIS insert (just a label so the ID reads
+        #             nicely; it does NOT participate in counter scoping)
+        #   NNN     = next counter for this PROJECT. Continues across months —
+        #             MKM Jan ends 010, MKM Feb starts 011, etc. Zero-padded to
+        #             3 digits; grows past 999 naturally without truncation.
+        # Atomic UPSERT on prefix only — counter increments race-safely.
         clean_proj = re.sub(r'[^A-Za-z]', '', project_name or '')
         prefix = (clean_proj[:3] or 'UNK').upper()
         date_part = datetime.now().strftime("%m%Y")
         cur.execute("""
-            INSERT INTO query_counters (prefix, year_month, counter)
-            VALUES (%s, %s, 1)
-            ON CONFLICT (prefix, year_month) DO UPDATE
+            INSERT INTO query_counters (prefix, counter)
+            VALUES (%s, 1)
+            ON CONFLICT (prefix) DO UPDATE
             SET counter = query_counters.counter + 1
             RETURNING counter
-        """, (prefix, date_part))
+        """, (prefix,))
         seq = cur.fetchone()[0]
         custom_id = f"{prefix}_{date_part}_{str(seq).zfill(3)}"
 

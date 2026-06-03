@@ -1518,8 +1518,11 @@ def export_logs():
             return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name="Global_Usage_Report.xlsx")
 
         # Original logic for specific Decision/Query logs (Project-specific exports)
+        # ORDER BY id ASC so rows in the Excel come out in the order queries
+        # were originally posted (id auto-increments on insert), matching the
+        # numeric order of the custom_query_id sequence.
         table = "decision_logs" if log_type == "decision" else "query_logs"
-        sql = f"SELECT * FROM {table} WHERE project_name ILIKE %s"
+        sql = f"SELECT * FROM {table} WHERE project_name ILIKE %s ORDER BY id ASC"
         df = pd.read_sql_query(sql, conn, params=(f"%{project}%",))
         
         output = BytesIO()

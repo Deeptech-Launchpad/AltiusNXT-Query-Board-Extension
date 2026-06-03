@@ -1517,12 +1517,15 @@ def export_logs():
             output.seek(0)
             return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name="Global_Usage_Report.xlsx")
 
-        # Original logic for specific Decision/Query logs (Project-specific exports)
-        # ORDER BY id ASC so rows in the Excel come out in the order queries
-        # were originally posted (id auto-increments on insert), matching the
-        # numeric order of the custom_query_id sequence.
+        # Original logic for specific Decision/Query logs (Project-specific exports).
+        # Order so the NEWEST month is at the top, and within each month the
+        # rows are in chronological (insertion) order:
+        #     Feb 2026 first query (011), Feb 2026 second (012),
+        #     then Jan 2026 first query (001), Jan 2026 second (002), ...
+        # DATE_TRUNC('month', created_at) DESC groups same-month rows together
+        # with the newest month on top; id ASC then orders within the month.
         table = "decision_logs" if log_type == "decision" else "query_logs"
-        sql = f"SELECT * FROM {table} WHERE project_name ILIKE %s ORDER BY id ASC"
+        sql = f"SELECT * FROM {table} WHERE project_name ILIKE %s ORDER BY DATE_TRUNC('month', created_at) DESC NULLS LAST, id ASC"
         df = pd.read_sql_query(sql, conn, params=(f"%{project}%",))
         
         output = BytesIO()

@@ -332,7 +332,10 @@ def upload_schema():
             c_name = safe(row, cat_col,  LIMITS['c_name'])
             a_name = safe(row, attr_col, LIMITS['a_name'])
 
-            if not p_name or not c_name or not a_name:
+            # Project Name and Taxonomy are required; Attribute (and the rest)
+            # may be blank. Blank-attribute rows are "placeholder" rows for a
+            # (project, taxonomy) combo whose attributes will be filled in later.
+            if not p_name or not c_name:
                 continue
         
             dedup_key = (p_name, c_name, a_name)
@@ -356,7 +359,7 @@ def upload_schema():
             ))
 
         if not attribute_rows:
-            return jsonify({"status": "error", "message": "No valid data rows found. Check that Project Name, Taxonomy, and Attribute columns are filled."}), 400
+            return jsonify({"status": "error", "message": "No valid data rows found. Check that the Project Name and Taxonomy columns are filled (Attribute, Definition, Sample LOV, Allowed LOV, and Data Type may be left blank)."}), 400
 
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
